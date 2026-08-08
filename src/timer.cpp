@@ -10,6 +10,11 @@ float timer::getDeltaMS(bool reset)
 	return getDelta<MilliSeconds>(reset);
 }
 
+float timer::getDeltaS(bool reset)
+{
+	return getDelta<Seconds>(reset);
+}
+
 float timer::getDeltaTicks(bool reset)
 {
 	return getDelta<Ticks>(reset);

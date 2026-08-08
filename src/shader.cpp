@@ -64,10 +64,6 @@ shader::shader(std::filesystem::path vertexShader, std::filesystem::path fragmen
 	glDeleteShader(fragment);
 }
 
-void shader::use()
-{
-	glUseProgram(ID);
-}
 
 int shader::getUniformLocation(const std::string& name)
 {

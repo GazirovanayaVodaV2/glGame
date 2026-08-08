@@ -1,3 +1,7 @@
 build
 out
 .vs
+dependencies/git
+dependencies/git/glad.lib
+dependencies/git/glfw.lib
+dependencies/git/glm.lib

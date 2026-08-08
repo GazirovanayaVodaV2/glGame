@@ -19,13 +19,15 @@ public:
 	shader(std::filesystem::path vertexShader,
 		std::filesystem::path fragmentShader);
 
-	void use();
-
 	int getUniformLocation(const std::string& name);
 	template <typename T> 
 	void set(const std::string& name, T value);
+
+	unsigned int getID() {
+		return ID;
+	}
 private:
-	unsigned int ID;
+	unsigned int ID = 0;
 	std::unordered_map<std::string, int> m_uniformLocationCache;
 
 	unsigned int compile(std::string code, types type);

@@ -1,31 +1,43 @@
 #pragma once
 
 #include <functional>
-#include <glad/glad.h>   
-#include <GLFW/glfw3.h>
-
+#include <openGLIncluder.hpp>
+#include <glm/mat4x4.hpp>
 #include "Idrawable.hpp"
+#include "shader.hpp"
+
+#define OPENGLVERSION_MAJOR 3
+#define OPENGLVERSION_MINOR 3
+constexpr int OPENGLVERSION = OPENGLVERSION_MAJOR * 10 + OPENGLVERSION_MINOR;
 
 class glfwContext {
 private:
 	static GLFWwindow* m_window;
 
 	static std::vector<std::function<void()>> m_inCycleEvents;
+	static std::vector<std::function<void()>> m_inCycleEvents_Undeletable;
 	static std::vector<Idrawable*> m_drawableObjects;
+
+	static int openGLVersion;
 
 	glfwContext() = default;
 	~glfwContext();
-
-	
 public:
+	static unsigned int currentShaderID;
+	static glm::mat4 projection;
+
 	static void init();
 
 	static void updateConfiguration();
 
 	static GLFWwindow* getWindow();
 
-	static void addCycleEvent(std::function<void()> event);
+	static void addCycleEvent(std::function<void()> event, bool canDelete = true);
 	static void addDrawTarget(Idrawable* object);
 
+	static void deleteAllRenderTargets();
+	static void deleteAllGameEvents();
+
 	static void mainGameCycle();
+	static void useShader(shader& _shader);
 };

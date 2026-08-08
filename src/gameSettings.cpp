@@ -18,7 +18,7 @@ bool gameSettings::vsync = false,
 gameSettings::fullscreen = false,
 gameSettings::resizeableWindow = true;
 
-float gameSettings::ratio = 16 / 9;
+float gameSettings::ratio = 16.0f / 9.0f, gameSettings::mouseSens = 0.1f, gameSettings::fov = 80.0f;
 
 void loadSettings()
 {

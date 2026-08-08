@@ -9,6 +9,8 @@ public:
 	static constexpr int ticksPerSecond = 20;
 	using NanoSeconds = std::chrono::duration<float, std::nano>;
 	using MilliSeconds = std::chrono::duration<float, std::milli>;
+	using Seconds = std::chrono::duration<float>;
+
 	using Ticks = std::chrono::duration<float, std::ratio<1, ticksPerSecond>>;
 
 	timer() { start(); };
@@ -19,6 +21,7 @@ public:
 
 	float getDeltaNS(bool reset = true);
 	float getDeltaMS(bool reset = true);
+	float getDeltaS(bool reset = true);
 	float getDeltaTicks(bool reset = true);
 
 	void reset();

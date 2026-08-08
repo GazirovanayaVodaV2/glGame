@@ -31,8 +31,6 @@ FetchContent_Declare(glfw
     GIT_SHALLOW TRUE
 )
 
-
-
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
@@ -52,6 +50,27 @@ FetchContent_Declare(glm
     GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(glm)
+
+FetchContent_Declare(
+    stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG        master
+    GIT_SHALLOW TRUE
+)
+
+FetchContent_MakeAvailable(stb)
+
+FetchContent_Declare(
+    assimp
+    GIT_REPOSITORY https://github.com/assimp/assimp.git
+    GIT_TAG        master
+    GIT_SHALLOW TRUE
+)
+
+FetchContent_MakeAvailable(assimp)
+
+add_library(stb_header INTERFACE)
+target_include_directories(stb_header INTERFACE ${stb_SOURCE_DIR})
 
 set(GLAD_SOURCES "dependencies/glad/src/glad.c")
 add_library(glad STATIC ${GLAD_SOURCES})
@@ -88,7 +107,10 @@ find_package(OpenGL REQUIRED)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE 
 nlohmann_json::nlohmann_json
-glm::glm glfw glad ${OPENGL_LIBRARIES})
+glm::glm glfw glad 
+stb_header
+assimp
+${OPENGL_LIBRARIES})
 
 set(SOURCE_ASSETS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/content")
 set(DEST_ASSETS_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
