@@ -8,19 +8,6 @@
 #include "src/camera.hpp"
 #include "src/Raycast.hpp"
 
-class Cube : public ISceneObject {
-private:
-    basicModel& m_model;
-public:
-    Cube(basicModel& model) : m_model(model){ }
-    void update() override {
-        m_model.update();
-    }
-    void draw(float alpha) {
-        m_model.tryDraw(alpha);
-    }
-};
-
 int main() {
     glfwContext::init();
 
@@ -36,10 +23,13 @@ int main() {
 	BlockTable::add(block, BlockMaterial::Stone, BlockStats{ 100.0f, 50.0f });
 	BlockTable::add(block2, BlockMaterial::Stone, BlockStats{ 100.0f, 50.0f });
 
-    world test("test", 0, worldRules{});
-    glfwSetWindowUserPointer(glfwContext::getWindow(), &test);
+    worldManager::createWorld("test", 0, worldRules{});
+    worldManager::loadWorld(0);
+    auto test = worldManager::getCurrentWorld();
 
-	test.changeDimension(worldDimension::Overworld);
+    glfwSetWindowUserPointer(glfwContext::getWindow(), test);
+
+	test->changeDimension(worldDimension::Overworld);
         
     glfwSetMouseButtonCallback(glfwContext::getWindow(), [](GLFWwindow* window, int button, int action, int mods) {
         auto* testptr = static_cast<world*>(glfwGetWindowUserPointer(window));
@@ -56,11 +46,6 @@ int main() {
                 testptr->getCurrentDimension()->setBlock(hit.adjacentBlockPos.x, hit.adjacentBlockPos.y, hit.adjacentBlockPos.z, 1);
             }
         }});
-	glfwContext::addDrawTarget(&test);
-	glfwContext::addCycleEvent([&test]() {
-		test.update();
-        test.loadChunksFromPos(Camera::getPos(), 8); 
-		}, false);
     //glfwContext::addDrawTarget(&stone);
 
     glfwContext::mainGameCycle();

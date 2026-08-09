@@ -30,8 +30,15 @@ namespace worldConstants {
 	static_assert(std::has_single_bit(static_cast<unsigned int>(HEIGHT)), "HEIGHT must be a power of 2!");
 }
 
-using blockArray = std::array<uint16_t, worldConstants::CHUNK_VOLUME>;
-using blockMetaArray = std::array<uint8_t, worldConstants::CHUNK_VOLUME>;
+struct blockArray {
+	std::array<uint16_t, worldConstants::CHUNK_VOLUME> m_array;
+	void setBlock(int x, int y, int z, int id);
+};
+struct blockMetaArray {
+	std::array<uint8_t, worldConstants::CHUNK_VOLUME> m_array;
+	void setMeta(int x, int y, int z, int meta);
+};
+
 using heightMapArray = std::array<int, worldConstants::WIDTH * worldConstants::LENGTH>;
 
 struct RawMeshData {
@@ -48,10 +55,6 @@ struct ChunkMeshData {
 };  
 
 class meshBuilder {
-private:
-	std::bitset<worldConstants::CHUNK_VOLUME> m_snapshot;
-
-	void takeSnapshot(const blockArray& blocks, const blockMetaArray& blockMeta, const heightMapArray& heightMap);
 public:
 	meshBuilder() = default;
 	~meshBuilder() = default;
@@ -71,27 +74,25 @@ struct SubChunkModel {
 	std::unique_ptr<basicModel> model;
 };
 
+struct chunkChanges {
+	int x, y, z, id, meta;
+};
+
 class chunk {
 private:
-
-	static inline uint32_t getSafeThreadCount() {
-		unsigned int cores = std::thread::hardware_concurrency();
-		if (cores == 0) return 2;
-		return std::min(16u, std::max(1u, cores - 1));
-	}
-
 	bool loaded = false;
 	bool arraysLoaded = false;
 	bool meshBuilderDirty = true;
 	std::vector<std::unique_ptr<ISceneObject>> entities;
 
 	std::shared_ptr<chunkBuffers> m_buffers;
+	std::vector<chunkChanges> m_changes;
 	std::vector<SubChunkModel> m_terrainModels;
 
-	static inline uint32_t MAX_THREADS = getSafeThreadCount();
-	static inline std::counting_semaphore<16> m_threadPoolSemaphore{ MAX_THREADS };
 	std::future<ChunkRawData> m_meshFuture;
 	bool m_isBuildingMesh = false;
+
+	std::filesystem::path* worldPath = nullptr;
 
 	int ix, iy;
 
@@ -107,28 +108,28 @@ private:
 		}
 	}
 public:
-	chunk() {
-		MAX_THREADS = getSafeThreadCount();
-	};
-	chunk(int xid, int yid, std::shared_ptr<chunkBuffers> buffers);
+	chunk() = default;
+	chunk(int xid, int yid, std::shared_ptr<chunkBuffers> buffers, std::filesystem::path* path);
 	~chunk() = default;
 
 	void update();
 	void draw(float alpha);
 
-	void setBlock(int x, int y, int z, int id);
+	void setBlock(int x, int y, int z, int id, int meta = 0);
 
 	static int getIndex(int x, int y, int z) {
 		return x + (z * worldConstants::WIDTH) + (y * worldConstants::WIDTH * worldConstants::LENGTH);
 	}
 
 	int getBlock(int lx, int ly, int lz);
+	int getBlockMeta(int lx, int ly, int lz);
 
 	std::pair<int, int> getChunkPos() {
 		return { ix, iy };
 	}
 
-	std::string saveChunk();
+	void loadFromFile();
+	void safeToFile();
 };
 
 enum class worldType {
@@ -161,19 +162,22 @@ class dimensionBase {
 protected:
 	std::vector<std::unique_ptr<chunk>> m_loadedChunks;
 	glm::vec2 pastRenderPos;
+	std::filesystem::path* worldPath = nullptr;
 
 	void generateChunkPrep(int xid, int yid, int seed);
 	virtual std::shared_ptr<chunkBuffers> generateChunk(int xid, int yid) {return std::make_shared<chunkBuffers>();};
 public:
 	dimensionBase() = default;
+	dimensionBase(std::filesystem::path* path) : worldPath(path) {}
 	~dimensionBase() = default;
 
 	void loadChunksFromPos(glm::vec3 pos, int renderDistance, int seed);
 	void update();
 	void draw(float alpha);
-	void setBlock(int x, int y, int z, int id);
+	void setBlock(int x, int y, int z, int id, int meta = 0);
 
 	int getBlock(int x, int y, int z);
+	int getBlockMeta(int x, int y, int z);
 
 	chunk* getChunk(int chunkX, int chunkZ)
 	{
@@ -185,10 +189,13 @@ public:
 		}
 		return nullptr;
 	}
+
+	void saveAllLoadedChunks();
 };
 
 class overworld : public dimensionBase {
 public:
+	using dimensionBase::dimensionBase;
 	std::shared_ptr<chunkBuffers> generateChunk(int xid, int yid) override;
 };
 
@@ -199,9 +206,10 @@ private:
 	worldRules m_rules;
 	std::array<std::unique_ptr<dimensionBase>, 3> m_dimensions;
 	dimensionBase* currentDimension = nullptr;
+	std::filesystem::path m_path;
 public:
 	world() = default;
-	~world() = default;
+	~world();
 
 	world(std::string name, int seed, worldRules rules);
 
@@ -216,5 +224,24 @@ public:
 };
 
 class worldManager {
+private:
+	static inline std::vector<std::unique_ptr<world>> m_worlds;
+	static inline world* currentWorld = nullptr;
+public:
+	worldManager();
+	~worldManager() = default;
 
+	static std::vector<std::unique_ptr<world>>& getList() {
+		return m_worlds;
+	}
+
+	template <typename... Args>
+	static inline void createWorld(Args&&... args) {
+		m_worlds.emplace_back(std::make_unique<world>(std::forward<Args>(args)...));
+	}
+
+	static void loadWorld(int id);
+	static world* getCurrentWorld() {
+		return currentWorld;
+	}
 };

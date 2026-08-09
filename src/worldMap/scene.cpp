@@ -7,14 +7,21 @@
 #include <assetManager/models/mesh.hpp>
 #include <bit>
 #include <future>
+#include <fstream>
 
-chunk::chunk(int xid, int yid, std::shared_ptr<chunkBuffers> buffers)
+#include "nlohmann/json.hpp"
+#include "../glfwContext.hpp"
+#include "../camera.hpp"
+
+#define getField(JSON, NAME, TYPE) JSON.at(NAME).get<TYPE>()
+chunk::chunk(int xid, int yid, std::shared_ptr<chunkBuffers> buffers, std::filesystem::path* path)
+	: worldPath(path)
 {
 	initBuffers();
 	this->ix = xid;
 	this->iy = yid;
-	//to do later
 	m_buffers = buffers;
+	loadFromFile();	
 	loaded = true;
 }
 
@@ -27,15 +34,11 @@ void chunk::update()
 
 		if (meshBuilderDirty && !m_isBuildingMesh) {
 			m_isBuildingMesh = true;
+			meshBuilderDirty = false;
 
 			m_meshFuture = std::async(std::launch::async, [blocks = *m_buffers->blocks,
 				meta = *m_buffers->blockMeta,
 				height = *m_buffers->heightMap]() {
-				m_threadPoolSemaphore.acquire();
-				struct SemaphoreGuard {
-					std::counting_semaphore<16>& sem;
-					~SemaphoreGuard() { sem.release(); }
-				} guard{ m_threadPoolSemaphore };
 				meshBuilder builder;
 				return builder.buildMesh(blocks, meta, height);
 				});
@@ -67,7 +70,6 @@ void chunk::update()
 					blockId++;
 				}
 				m_terrainModels = std::move(newTerrainModels);
-				meshBuilderDirty = false;
 				m_isBuildingMesh = false;
 			}
 		}
@@ -98,24 +100,112 @@ void chunk::draw(float alpha) {
 	//glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
-void chunk::setBlock(int x, int y, int z, int id)
+void chunk::setBlock(int x, int y, int z, int id, int meta)
 {
-	(*m_buffers->blocks)[getIndex(x, y, z)] = id;
-	meshBuilderDirty = true;
+	if (m_buffers->blocks) {
+		m_buffers->blocks->setBlock(x, y, z, id);
+		m_buffers->blockMeta->setMeta(x, y, z, meta);
+
+		auto heightMapIndex = x + z * worldConstants::WIDTH;
+		if (y > (*m_buffers->heightMap)[heightMapIndex]) {
+			(*m_buffers->heightMap)[heightMapIndex] = y;
+		}
+		else if (y == (*m_buffers->heightMap)[heightMapIndex] && id == 0) {
+			int iy = y;
+			while (iy > 0 && (m_buffers->blocks->m_array)[getIndex(x, iy - 1, z)] == 0) {
+				iy--;
+			}
+			if (iy > 0 && (m_buffers->blocks->m_array)[getIndex(x, iy - 1, z)] != 0) {
+				iy--;
+			}
+			(*m_buffers->heightMap)[heightMapIndex] = iy;
+		}
+
+		if (loaded) {
+			m_changes.push_back({ x,y,z,id,meta });
+		}
+
+		meshBuilderDirty = true;
+	}
 }
 
 int chunk::getBlock(int lx, int ly, int lz)
 {
 	if (!m_buffers->blocks) return 0;
 	size_t index = getIndex(lx, ly, lz);
-	return (*m_buffers->blocks)[index];
+	return (m_buffers->blocks->m_array)[index];
 }
 
-std::string chunk::saveChunk()
+int chunk::getBlockMeta(int lx, int ly, int lz)
 {
-	return std::string();
+	if (!m_buffers->blockMeta) return 0;
+	size_t index = getIndex(lx, ly, lz);
+	return (m_buffers->blockMeta->m_array)[index];
 }
 
+void chunk::loadFromFile()
+{
+	if (worldPath) {
+		using json = nlohmann::json;
+		std::ifstream chunkFile(*worldPath / std::format("{}_{}.json", this->ix, this->iy));
+
+		if (!chunkFile.is_open()) {
+			return;
+		}
+		auto parsedFile = json::parse(chunkFile);
+		/*
+		
+		changes = {{1,2,4,5,6,}, {...}}
+		
+		*/
+		auto blockChanges = getField(parsedFile, "blockChanges", std::vector<std::vector<int>>);
+
+		m_changes.clear();
+		for (auto& rawChange : blockChanges) {
+			chunkChanges change{
+				rawChange[0],
+				rawChange[1],
+				rawChange[2],
+				rawChange[3],
+				rawChange[4]
+			};
+
+			m_changes.push_back(change);
+
+			setBlock(change.x, change.y, change.z, change.id, change.meta);
+		}
+	}
+}
+
+void chunk::safeToFile()
+{
+	if (worldPath) {
+		using json = nlohmann::json;
+		if (m_changes.size() == 0) {
+			return;
+		}
+		std::ofstream chunkFile(*worldPath / std::format("{}_{}.json",this->ix, this->iy));
+		if (!chunkFile.is_open()) {
+			return;
+		}
+		std::vector<std::vector<int>> blockChanges;
+		blockChanges.reserve(m_changes.size());
+
+		for (const auto& change : m_changes) {
+			blockChanges.push_back({
+				change.x,
+				change.y,
+				change.z,
+				change.id,
+				change.meta
+				});
+		}
+
+		json parsedFile;
+		parsedFile["blockChanges"] = blockChanges;
+		chunkFile << parsedFile.dump(4);
+	}
+}
 
 void dimensionBase::loadChunksFromPos(glm::vec3 pos, int renderDistance, int seed)
 {
@@ -130,7 +220,11 @@ void dimensionBase::loadChunksFromPos(glm::vec3 pos, int renderDistance, int see
 
 	std::erase_if(m_loadedChunks, [minX, maxX, minZ, maxZ](const std::unique_ptr<chunk>& c) {
 		auto [chunkX, chunkZ] = c->getChunkPos();
-		return chunkX < minX || chunkX > maxX || chunkZ < minZ || chunkZ > maxZ;
+		bool shouldUnlocad = (chunkX < minX || chunkX > maxX || chunkZ < minZ || chunkZ > maxZ);
+		if (shouldUnlocad) {
+			c->safeToFile();
+		}
+		return shouldUnlocad;
 		});
 
 	for (int i = minX; i < maxX; i++) {
@@ -154,7 +248,7 @@ void dimensionBase::draw(float alpha)
 	}
 }
 
-void dimensionBase::setBlock(int x, int y, int z, int id)
+void dimensionBase::setBlock(int x, int y, int z, int id, int meta)
 {
 	if (y < 0 || y >= worldConstants::HEIGHT) {
 		return; // Out of bounds
@@ -171,7 +265,7 @@ void dimensionBase::setBlock(int x, int y, int z, int id)
 		return;
 	}
 
-	targetChunk->setBlock(localX, y, localZ, id);
+	targetChunk->setBlock(localX, y, localZ, id, meta);
 }
 
 int dimensionBase::getBlock(int x, int y, int z)
@@ -187,6 +281,26 @@ int dimensionBase::getBlock(int x, int y, int z)
 	return targetChunk->getBlock(x & (worldConstants::WIDTH - 1), y, z & (worldConstants::LENGTH - 1));
 }
 
+int dimensionBase::getBlockMeta(int x, int y, int z)
+{
+	if (y < 0 || y >= worldConstants::HEIGHT) return 0;
+
+	int gridX = x >> std::countr_zero(static_cast<unsigned int>(worldConstants::WIDTH));
+	int gridZ = z >> std::countr_zero(static_cast<unsigned int>(worldConstants::LENGTH));
+
+	chunk* targetChunk = getChunk(gridX, gridZ);
+	if (!targetChunk) return 0;
+
+	return targetChunk->getBlockMeta(x & (worldConstants::WIDTH - 1), y, z & (worldConstants::LENGTH - 1));
+}
+
+void dimensionBase::saveAllLoadedChunks()
+{
+	for (auto& chunks : m_loadedChunks) {
+		chunks->safeToFile();
+	}
+}
+
 void dimensionBase::generateChunkPrep(int xid, int yid, int seed)
 {
 	bool alreadyLoaded = std::any_of(m_loadedChunks.begin(), m_loadedChunks.end(), [xid, yid](const std::unique_ptr<chunk>& c) {
@@ -195,15 +309,41 @@ void dimensionBase::generateChunkPrep(int xid, int yid, int seed)
 		});
 
 	if (!alreadyLoaded) {
-		m_loadedChunks.emplace_back(std::make_unique<chunk>(xid, yid, generateChunk(xid, yid)));
+		m_loadedChunks.emplace_back(std::make_unique<chunk>(xid, yid, generateChunk(xid, yid), worldPath));
+	}
+}
+
+world::~world()
+{
+	for (auto& dim : m_dimensions) {
+		if (dim) {
+			dim->saveAllLoadedChunks();
+		}
 	}
 }
 
 world::world(std::string name, int seed, worldRules rules)
 	: m_worldName(name), m_seed(seed), m_rules(rules) 
 {
+	using json = nlohmann::json;
+	auto dir = std::format("saves/{}", name);
+	m_path = dir;
+	std::filesystem::create_directories(m_path);
+
+	std::ofstream worldInfo(dir + "/info.json");
+
+	json parsedFile;
+	parsedFile["seed"] = seed;
+	parsedFile["name"] = name;
+	parsedFile["cheats"] = rules.allowCheats;
+	parsedFile["difficulty"] = rules.difficulty;
+	parsedFile["type"] = rules.type;
+
+	worldInfo << parsedFile.dump(4);
+
 	// init dimensions to the world
-	m_dimensions[0] = std::make_unique<overworld>();
+	m_dimensions[0] = std::make_unique<overworld>(&m_path);
+	changeDimension(worldDimension::Overworld);
 }
 
 void world::changeDimension(worldDimension dimension)
@@ -246,42 +386,38 @@ std::shared_ptr<chunkBuffers> overworld::generateChunk(int xid, int yid)
 	newgen->blockMeta = std::make_unique<blockMetaArray>();
 	newgen->heightMap = std::make_unique<heightMapArray>();
 
-	size_t halfSize = newgen->blocks->size() / 2;
-	std::fill_n(newgen->blocks->begin(), halfSize, 1);
-	std::fill(newgen->blocks->begin() + halfSize, newgen->blocks->end(), 2);
+	for (int x = 0; x < worldConstants::WIDTH; x++) {
+		for (int z = 0; z < worldConstants::LENGTH; z++) {
+			for (int y = 0; y < 10; y++) {
+				newgen->blocks->setBlock(x, y, z, 1);
+				newgen->blockMeta->setMeta(x, y, z, 0);
+			}
 
-	std::fill(newgen->blockMeta->begin(), newgen->blockMeta->end(), 0);
-	std::fill(newgen->heightMap->begin(), newgen->heightMap->end(), 255);
+			newgen->blocks->setBlock(x, 10, z, 2);
+			newgen->blockMeta->setMeta(x, 10, z, 0);
+
+			(*newgen->heightMap)[x + z * worldConstants::WIDTH] = 10;
+		}	
+	}
+
 	return newgen;
 }
 
-void meshBuilder::takeSnapshot(const blockArray& blocks, const blockMetaArray& blockMeta, const heightMapArray& heightMap)
-{
-	for (int x = 0; x < worldConstants::WIDTH; x++) {
-		for (int z = 0; z < worldConstants::LENGTH; z++) {
-			int maxHeight = std::clamp(heightMap[x + z * worldConstants::WIDTH], 0, worldConstants::HEIGHT - 1);
-			for (int y = maxHeight; y >= 0; y--) {
-				auto ind = chunk::getIndex(x, y, z);
-				if (blocks[ind] != 0) {
-					m_snapshot[chunk::getIndex(x, y, z)] = true;
-				}
-			}
-		}
-	}
-}
 
 ChunkRawData meshBuilder::buildMesh(const blockArray& blocks, const blockMetaArray& blockMeta, const heightMapArray& heightMap)
 {
 	std::array<std::vector<vertex>, 256> verticesMap;
 	std::array<std::vector<unsigned int>, 256> indicesMap;
 
-	auto isSolid = [&blocks](int x, int y, int z) -> bool {
+	auto& block_array = blocks.m_array;
+
+	auto isSolid = [&block_array](int x, int y, int z) -> bool {
 		if (x < 0 || x >= worldConstants::WIDTH ||
 			y < 0 || y >= worldConstants::HEIGHT ||
 			z < 0 || z >= worldConstants::LENGTH) {
 			return false;
 		}
-		return blocks[chunk::getIndex(x, y, z)] != 0;
+		return block_array[chunk::getIndex(x, y, z)] != 0;
 		};
 
 	auto addFace = [](std::vector<vertex>& vertices, std::vector<unsigned int>& indices,
@@ -308,7 +444,7 @@ ChunkRawData meshBuilder::buildMesh(const blockArray& blocks, const blockMetaArr
 			int maxHeight = std::clamp(heightMap[x + z * worldConstants::WIDTH], 0, worldConstants::HEIGHT - 1);
 			for (int y = 0; y <= maxHeight; ++y) {
 
-				int blockId = blocks[chunk::getIndex(x, y, z)];
+				int blockId = block_array[chunk::getIndex(x, y, z)];
 				if (blockId == 0) continue;
 
 				auto& verts = verticesMap[blockId];
@@ -349,4 +485,39 @@ ChunkRawData meshBuilder::buildMesh(const blockArray& blocks, const blockMetaArr
 		}
 	}
 	return result;
+}
+
+void blockArray::setBlock(int x, int y, int z, int id)
+{
+	if (y >= 0 && y < worldConstants::HEIGHT) {
+		m_array[chunk::getIndex(x, y, z)] = id;
+	}
+	
+}
+
+void blockMetaArray::setMeta(int x, int y, int z, int meta)
+{
+	if (y >= 0 && y < worldConstants::HEIGHT) {
+		m_array[chunk::getIndex(x, y, z)] = meta;
+	}
+}
+
+worldManager::worldManager()
+{
+}
+
+void worldManager::loadWorld(int id)
+{
+	if (id >= m_worlds.size())
+	{
+		return;
+	}
+	currentWorld = m_worlds[id].get();
+	glfwContext::deleteAllRenderTargets();
+	glfwContext::deleteAllGameEvents();
+	glfwContext::addDrawTarget(currentWorld);
+	glfwContext::addCycleEvent([]() {
+		currentWorld->update();
+		currentWorld->loadChunksFromPos(Camera::getPos(), 8);
+		}, false);
 }
