@@ -9,6 +9,7 @@
 glm::vec3 Camera::pos = glm::vec3(0.0f, 0.0f, 3.0f);
 glm::vec3 Camera::front = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 Camera::up = glm::vec3(0.0f, 1.0f, 0.0f);
+glm::vec3 Camera::offset{};
 float Camera::yaw = -90.0f;
 float Camera::pitch = 0.0f;
 float Camera::lastMouseX = 0.0f, Camera::lastMouseY = 0.0f;
@@ -43,11 +44,13 @@ void Camera::Rotate(float xoffset, float yoffset)
 void Camera::MoveTo(glm::vec3 dest)
 {
 	pos = dest;
+	pos += offset;
 	updateVectors();
 }
 
 void Camera::MoveOn(glm::vec3 delta)
 {
+	pos += offset;
 	pos += front * delta.z;
 	pos += glm::normalize(glm::cross(front, up)) * delta.x;
 

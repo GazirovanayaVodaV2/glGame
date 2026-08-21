@@ -50,7 +50,7 @@ mesh::mesh(std::filesystem::path path)
 
 	if (std::filesystem::path(path).extension() == ".obj") {
 		const aiScene* scene = importer.ReadFile(path.string(),
-			aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenSmoothNormals);
+			aiProcess_Triangulate | aiProcess_GenSmoothNormals);
 
 		if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
 			std::cerr << "Assimp Error: " << importer.GetErrorString() << std::endl;

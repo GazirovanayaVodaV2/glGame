@@ -12,6 +12,7 @@
 #include "nlohmann/json.hpp"
 #include "../glfwContext.hpp"
 #include "../camera.hpp"
+#include "../collisionSystem.hpp"
 
 #define getField(JSON, NAME, TYPE) JSON.at(NAME).get<TYPE>()
 chunk::chunk(int xid, int yid, std::shared_ptr<chunkBuffers> buffers, std::filesystem::path* path)
@@ -29,6 +30,7 @@ void chunk::update()
 {
 	if (loaded) {
 		for (const auto& entity : entities) {
+			entity->SaveStateForInterpolation();
 			entity->update();
 		}
 
@@ -75,6 +77,7 @@ void chunk::update()
 		}
 		for (auto& subModel : m_terrainModels) {
 			if (subModel.model) {
+				subModel.model->SaveStateForInterpolation();
 				subModel.model->update();
 			}
 			
@@ -210,8 +213,7 @@ void chunk::safeToFile()
 void dimensionBase::loadChunksFromPos(glm::vec3 pos, int renderDistance, int seed)
 {
 	auto halfRenderDistance = renderDistance / 2;
-	int centerChunkX = static_cast<int>(std::floor(pos.x / worldConstants::WIDTH));
-	int centerChunkZ = static_cast<int>(std::floor(pos.z / worldConstants::LENGTH));
+	auto [centerChunkX, centerChunkZ] = worldConstants::worldCoordToChunkCoord(pos.x, pos.z);
 
 	int minX = centerChunkX - halfRenderDistance;
 	int maxX = centerChunkX + halfRenderDistance;
@@ -254,8 +256,7 @@ void dimensionBase::setBlock(int x, int y, int z, int id, int meta)
 		return; // Out of bounds
 	}
 	
-	int gridX = x >> std::countr_zero(static_cast<unsigned int>(worldConstants::WIDTH));
-	int gridZ = z >> std::countr_zero(static_cast<unsigned int>(worldConstants::LENGTH));
+	auto [gridX, gridZ] = worldConstants::worldCoordToChunkCoord(x, z);
 	int localX = x & (worldConstants::WIDTH - 1);
 	int localZ = z & (worldConstants::LENGTH - 1);
 
@@ -272,8 +273,7 @@ int dimensionBase::getBlock(int x, int y, int z)
 {
 	if (y < 0 || y >= worldConstants::HEIGHT) return 0;
 
-	int gridX = x >> std::countr_zero(static_cast<unsigned int>(worldConstants::WIDTH));
-	int gridZ = z >> std::countr_zero(static_cast<unsigned int>(worldConstants::LENGTH));
+	auto [gridX, gridZ] = worldConstants::worldCoordToChunkCoord(x, z);
 
 	chunk* targetChunk = getChunk(gridX, gridZ);
 	if (!targetChunk) return 0;
@@ -285,8 +285,7 @@ int dimensionBase::getBlockMeta(int x, int y, int z)
 {
 	if (y < 0 || y >= worldConstants::HEIGHT) return 0;
 
-	int gridX = x >> std::countr_zero(static_cast<unsigned int>(worldConstants::WIDTH));
-	int gridZ = z >> std::countr_zero(static_cast<unsigned int>(worldConstants::LENGTH));
+	auto [gridX, gridZ] = worldConstants::worldCoordToChunkCoord(x, z);
 
 	chunk* targetChunk = getChunk(gridX, gridZ);
 	if (!targetChunk) return 0;
@@ -323,11 +322,11 @@ world::~world()
 }
 
 world::world(std::string name, int seed, worldRules rules)
-	: m_worldName(name), m_seed(seed), m_rules(rules) 
+	: m_worldName(name), m_seed(seed), m_rules(rules)
 {
-	using json = nlohmann::json;
+	using json = nlohmann::json; 
 	auto dir = std::format("saves/{}", name);
-	m_path = dir;
+	m_path = dir; 
 	std::filesystem::create_directories(m_path);
 
 	std::ofstream worldInfo(dir + "/info.json");
@@ -365,16 +364,69 @@ void world::loadChunksFromPos(glm::vec3 pos, int renderDistance)
 }
 
 void world::draw(float alpha)
-{
-	if (currentDimension) {
-		currentDimension->draw(alpha);
-	}
+{ 
+	if (currentDimension) { 
+		glDepthFunc(GL_LEQUAL); 
+		glDepthMask(GL_FALSE);
+		glDisable(GL_CULL_FACE); 
+		skybox->draw(0);
+		glEnable(GL_CULL_FACE); 
+		glDepthMask(GL_TRUE);
+		glDepthFunc(GL_LESS);
+		currentDimension->draw(alpha);   
+
+		for (auto& obj : m_globalObjects) {
+			obj->draw(alpha);
+			obj->drawDebugAABB();
+		}
+	} 
 }
 
 void world::update()
 {
 	if (currentDimension) {
 		currentDimension->update();
+
+		for (auto& obj : m_globalObjects) {
+			obj->SaveStateForInterpolation();
+			obj->update();
+			if (obj->getPos().y < -100.0f) {
+				obj->MoveTo({0, worldConstants::HEIGHT, 0});
+			}
+
+			auto objPos = obj->getPos();
+			int minX = static_cast<int>(std::floor(objPos.x - 1.0f));
+			int maxX = static_cast<int>(std::floor(objPos.x + 1.0f));
+			int minY = static_cast<int>(std::floor(objPos.y - 1.0f));
+			int maxY = static_cast<int>(std::floor(objPos.y + 2.0f));
+			int minZ = static_cast<int>(std::floor(objPos.z - 1.0f));
+			int maxZ = static_cast<int>(std::floor(objPos.z + 1.0f));
+
+			collisionMesh nearbyBlocksBoxes;
+
+			for (int x = minX; x <= maxX; ++x) {
+				for (int y = minY; y <= maxY; ++y) {
+					for (int z = minZ; z <= maxZ; ++z) {
+						int id = currentDimension->getBlock(x, y, z);
+						if (id == 0) continue;
+
+						const auto& block = BlockTable::getBlock(id);
+						if (!block) continue;
+
+						auto localBoxes = block->getCollisionMesh();
+
+						glm::vec3 blockWorldPos(x,y,z);
+						for (const auto& localBox : localBoxes) {
+							nearbyBlocksBoxes.push_back(localBox.offset(blockWorldPos));
+						}
+					}
+				}
+			}
+
+			if (!nearbyBlocksBoxes.empty()) {
+				obj->checkCollision(nearbyBlocksBoxes, Transform{});
+			}
+		}
 	}
 }
 
@@ -388,7 +440,9 @@ std::shared_ptr<chunkBuffers> overworld::generateChunk(int xid, int yid)
 
 	for (int x = 0; x < worldConstants::WIDTH; x++) {
 		for (int z = 0; z < worldConstants::LENGTH; z++) {
-			for (int y = 0; y < 10; y++) {
+			newgen->blocks->setBlock(x, 0, z, 3);
+			newgen->blockMeta->setMeta(x, 0, z, 0);
+			for (int y = 1; y < 10; y++) {
 				newgen->blocks->setBlock(x, y, z, 1);
 				newgen->blockMeta->setMeta(x, y, z, 0);
 			}
@@ -518,6 +572,6 @@ void worldManager::loadWorld(int id)
 	glfwContext::addDrawTarget(currentWorld);
 	glfwContext::addCycleEvent([]() {
 		currentWorld->update();
-		currentWorld->loadChunksFromPos(Camera::getPos(), 8);
+		currentWorld->loadChunksFromPos(Camera::getPos(), 16);
 		}, false);
 }

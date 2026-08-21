@@ -9,7 +9,7 @@
 
 GLFWwindow* glfwContext::m_window = nullptr;
 
-std::vector<std::function<void()>> glfwContext::m_inCycleEvents, glfwContext::m_inCycleEvents_Undeletable;
+std::vector<voidFunction> glfwContext::m_inCycleEvents, glfwContext::m_inCycleEvents_Undeletable;
 std::vector<Idrawable*> glfwContext::m_drawableObjects;
 unsigned int glfwContext::currentShaderID = 0;
 glm::mat4 glfwContext::projection = glm::perspective(glm::radians(80.0f), 16.0f / 9.0f, 0.1f, 100.0f);
@@ -91,7 +91,7 @@ void glfwContext::init()
     }
     //
 
-    glfwContext::projection = glm::perspective(glm::radians(gameSettings::fov), gameSettings::ratio, 0.1f, 100.0f);
+    glfwContext::projection = glm::perspective(glm::radians(gameSettings::fov), gameSettings::ratio, 0.1f, 1000.0f);
    
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
@@ -134,6 +134,7 @@ void glfwContext::mainGameCycle()
         }
 
         alpha = accumulator;
+        Camera::update();
         Camera::updateInterpolatedMatrix(alpha);
 
 
@@ -171,12 +172,13 @@ void glfwContext::useShader(shader& _shader)
     }
 }
 
+
 GLFWwindow* glfwContext::getWindow()
 {
     return m_window;
 }
 
-void glfwContext::addCycleEvent(std::function<void()> event, bool canDelete)
+void glfwContext::addCycleEvent(voidFunction event, bool canDelete)
 {
     if (canDelete) {
         m_inCycleEvents.push_back(event);
@@ -190,4 +192,3 @@ void glfwContext::addDrawTarget(Idrawable* object)
 {
     m_drawableObjects.push_back(object);
 }
-

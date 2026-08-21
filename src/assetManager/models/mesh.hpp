@@ -72,4 +72,7 @@ public:
 	bool isloaded() {
 		return !m_verticies.empty() && !m_indicies.empty();
 	}
+
+    const std::vector<vertex>& getVertices() const { return m_verticies; }
+    const std::vector<unsigned int>& getIndices() const { return m_indicies; }
 };

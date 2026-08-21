@@ -5,6 +5,8 @@
 #include <vector>
 #include <assetManager/textures/texture.hpp>
 
+#include "../collisionSystem.hpp"
+
 enum class BlockMaterial {
     Air,
     Wood,
@@ -19,15 +21,21 @@ struct BlockStats {
 
 class Block : public ISceneObject {
 private:
-	glm::vec3 m_position;
+	glm::vec3 m_position, m_lastpos;
     BlockMaterial m_material;
 	basicModel& m_model;
 	int state = 0;
     float hp = 100.0f;
     BlockStats m_stats;
+
+	collisionMesh m_collisionMesh;
+
+	void handeCollision(glm::vec3 mtv) override {};
 public:
     Block(basicModel& model, BlockMaterial material, BlockStats stats) 
-        : m_model(model), m_material(material), m_stats(stats) {}
+        : m_model(model), m_material(material), m_stats(stats) {
+		m_collisionMesh.push_back({ {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f} });
+	}
     void update() override {
         m_model.update();
     } 
@@ -54,6 +62,18 @@ public:
 		m_model.Rotate(deltaRotation);
 	}
 
+	void SaveStateForInterpolation() override {
+		m_lastpos = m_position;
+		m_model.SaveStateForInterpolation();
+	}
+
+	mesh& getMesh() {
+		return m_model.getMesh();
+	};
+	Transform& getTransform() {
+		return m_model.getTransform();
+	}
+
 	texture& getTexture() {
 		return m_model.getTexture();
 	}
@@ -67,6 +87,9 @@ public:
 	std::string getShaderName() {
 		return m_model.getShaderName();
 	}
+	collisionMesh& getCollisionMesh() {
+		return m_collisionMesh;
+	};
 };
 
 class BlockTable {

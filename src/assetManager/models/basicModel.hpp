@@ -8,6 +8,7 @@
 #include "transform.hpp"
 
 #include "worldMap/ISceneObject.hpp"
+#include <collisionSystem.hpp>
 
 class basicModel : public ISceneObject {
 private:
@@ -17,6 +18,13 @@ private:
 
 	Transform m_transform, m_lastState;
 	std::string m_textureName, m_meshName, m_shaderName;
+	collisionMesh m_collisionMesh;
+
+	void initCollisionMesh() {
+		m_collisionMesh.push_back({ {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f} });
+	}
+
+	void handeCollision(glm::vec3 mtv) override {};
 public:
 	basicModel() = delete;
 	basicModel(std::string textureName, std::string meshName, std::string shaderName) 
@@ -26,7 +34,9 @@ public:
 		m_textureName(textureName),
 		m_meshName(meshName),
 		m_shaderName(shaderName)
-	{}
+	{
+		initCollisionMesh();
+	}
 
 	basicModel(std::string textureName, mesh& mesh, std::string shaderName)
 		:m_shader(mainAssetManager::get<shader>(shaderName)),
@@ -35,7 +45,9 @@ public:
 		m_textureName(textureName),
 		m_meshName(std::string()),
 		m_shaderName(shaderName)
-	{}
+	{
+		initCollisionMesh();
+	}
 
 	basicModel(const basicModel&) = delete;
 	basicModel& operator=(const basicModel&) = delete;
@@ -43,19 +55,15 @@ public:
 	~basicModel() = default;
 
 	void MoveTo(glm::vec3 dest) override {
-		m_lastState.pos = m_transform.pos;
 		m_transform.pos = dest;
 	};
 	void MoveOn(glm::vec3 delta) override {
-		m_lastState.pos = m_transform.pos;
 		m_transform.pos += delta;
 	};
 	void Rotate(glm::vec3 deltaRotation) override {
-		m_lastState.rotation = m_transform.rotation;
 		m_transform.rotation += deltaRotation;
 	};
 	void Scale(glm::vec3 s) {
-		m_lastState.scale = m_transform.scale;
 		m_transform.scale = s;
 	}
 	void draw(float alpha) override;
@@ -74,5 +82,20 @@ public:
 	}
 	std::string getShaderName() {
 		return m_shaderName;
+	}
+
+	mesh& getMesh() override {
+		return m_mesh;
+	}
+
+	Transform& getTransform() override {
+		return m_transform;
+	}
+	collisionMesh& getCollisionMesh() {
+		return m_collisionMesh;
+	};
+
+	void SaveStateForInterpolation() override {
+		m_lastState = m_transform;
 	}
 };

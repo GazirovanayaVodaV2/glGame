@@ -9,7 +9,6 @@
 #include "Block.hpp"
 #include "glm/vec2.hpp"
 
-#include "../player/player.hpp"
 #include <assetManager/models/mesh.hpp>
 #include <unordered_map>
 #include <cstdint>
@@ -24,6 +23,19 @@ namespace worldConstants {
 	static constexpr int LENGTH = 16;
 	static constexpr int HEIGHT = 256;
 	static constexpr int CHUNK_VOLUME = WIDTH * LENGTH * HEIGHT;
+
+	constexpr float gravity = 0.98f;
+
+	inline std::pair<int, int> worldCoordToChunkCoord(float x, float z)
+	{
+		auto _x = static_cast<int>(std::floor(x));
+		auto _z = static_cast<int>(std::floor(z));
+
+		auto ix = _x >> std::countr_zero(static_cast<unsigned int>(worldConstants::WIDTH));
+		auto iz = _z >> std::countr_zero(static_cast<unsigned int>(worldConstants::LENGTH));
+
+		return { ix, iz };
+	}
 
 	static_assert(std::has_single_bit(static_cast<unsigned int>(WIDTH)), "WIDTH must be a power of 2!");
 	static_assert(std::has_single_bit(static_cast<unsigned int>(LENGTH)), "LENGTH must be a power of 2!");
@@ -130,6 +142,10 @@ public:
 
 	void loadFromFile();
 	void safeToFile();
+
+	std::vector<SubChunkModel>& getTerrainModel() {
+		return m_terrainModels;
+	}
 };
 
 enum class worldType {
@@ -166,6 +182,7 @@ protected:
 
 	void generateChunkPrep(int xid, int yid, int seed);
 	virtual std::shared_ptr<chunkBuffers> generateChunk(int xid, int yid) {return std::make_shared<chunkBuffers>();};
+	
 public:
 	dimensionBase() = default;
 	dimensionBase(std::filesystem::path* path) : worldPath(path) {}
@@ -207,8 +224,10 @@ private:
 	std::array<std::unique_ptr<dimensionBase>, 3> m_dimensions;
 	dimensionBase* currentDimension = nullptr;
 	std::filesystem::path m_path;
+	std::vector<ISceneObject*> m_globalObjects;
+	std::unique_ptr<basicModel> skybox = std::make_unique<basicModel>("skybox", "skybox", "skyboxShader");
 public:
-	world() = default;
+	world();
 	~world();
 
 	world(std::string name, int seed, worldRules rules);
@@ -221,6 +240,10 @@ public:
 	void loadChunksFromPos(glm::vec3 pos, int renderDistance);
 	void draw(float alpha);
 	void update();
+
+	void addGlobalObject(ISceneObject* obj) { m_globalObjects.push_back(obj); }
+
+	void SaveStateForInterpolation() override {}
 };
 
 class worldManager {

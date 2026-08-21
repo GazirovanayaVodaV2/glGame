@@ -3,6 +3,6 @@
     "resolution": [1366, 768],
     "vsync": false,
     "fps": 900,
-    "fullScreen": true,
+    "fullScreen": false,
     "resizeable": false
 }
