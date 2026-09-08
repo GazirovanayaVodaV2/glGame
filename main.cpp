@@ -11,7 +11,7 @@
 
 struct GameState {
     world* currentWorld = nullptr;
-    //Player* player = nullptr;
+    Player* player = nullptr;
 };
 
 int main() {
@@ -23,27 +23,35 @@ int main() {
     mainAssetManager::add<texture>("stone", "assets/textures/stone.png", false);
     mainAssetManager::add<texture>("cobblestone", "assets/textures/cobblestone.png", false);
     mainAssetManager::add<texture>("bedrock", "assets/textures/bedrock.png", false);
+    mainAssetManager::add<texture>("dirt", "assets/textures/dirt.png", false);
+    mainAssetManager::add<texture>("grassBlock", "assets/textures/grass_block_full.png", false);
     mainAssetManager::add<texture>("skybox", "assets/textures/skybox.png", false);
+    //mainAssetManager::add<texture>("test", "assets/textures/test.png", false);
     mainAssetManager::add<mesh>("steve", "assets/models/steve.obj");
     mainAssetManager::add<mesh>("block", "assets/models/block.obj");
+    mainAssetManager::add<mesh>("multiTextureBlock", "assets/models/multiTextureBlock.obj");
     mainAssetManager::add<mesh>("skybox", "assets/models/skybox.obj");
 
     basicModel stone("stone", "block", "blockShader"),
         cobblestone("cobblestone", "block", "blockShader"),
-        bedrock("bedrock", "block", "blockShader");
-
+        bedrock("bedrock", "block", "blockShader"),
+        dirt("dirt", "block", "blockShader"),
+        grassBlock("grassBlock", "multiTextureBlock", "blockShader");
+       
 	BlockTable::add(stone, BlockMaterial::Stone, BlockStats{ 100.0f, 50.0f });
 	BlockTable::add(cobblestone, BlockMaterial::Stone, BlockStats{ 100.0f, 50.0f });
 	BlockTable::add(bedrock, BlockMaterial::Stone, BlockStats{ -1.0f, -1.0f });
+    BlockTable::add(dirt, BlockMaterial::Grass, BlockStats{ 100.0f, 50.0f });
+    BlockTable::add(grassBlock, BlockMaterial::Grass, BlockStats{ 100.0f, 50.0f });
 
     worldManager::createWorld("test", 0, worldRules{});
     worldManager::loadWorld(0);
     world* currentWorld = worldManager::getCurrentWorld();
     currentWorld->changeDimension(worldDimension::Overworld);
 
-    auto player = std::make_unique<Player>(glm::vec3(0.0f, 15.0f, 0.0f));
+    auto player = std::make_unique<Player>(glm::vec3(0.0f, 16.0f, 0.0f));
     currentWorld->addGlobalObject(player.get());
-    GameState gameState{ currentWorld, /*player.get()*/ };
+    GameState gameState{ currentWorld, player.get() };
     glfwSetWindowUserPointer(glfwContext::getWindow(), &gameState);
         
     glfwSetCursorPosCallback(glfwContext::getWindow(), Camera::mouseCallback);
@@ -62,7 +70,17 @@ int main() {
                     currentDim->setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, 0);
                 }
                 else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
-                    currentDim->setBlock(hit.adjacentBlockPos.x, hit.adjacentBlockPos.y, hit.adjacentBlockPos.z, 1);
+                    auto playerBox = state->player->getCollisionMesh().globalBounds.offset(state->player->getPos());
+
+                    collisionSystem::AABB blockBox{ glm::vec3(hit.adjacentBlockPos), glm::vec3(hit.adjacentBlockPos) + glm::vec3(1,1,1) };
+
+                    bool Xcoll = !!collisionSystem::checkCollisionX(playerBox, blockBox);
+                    bool Ycoll = !!collisionSystem::checkCollisionY(playerBox, blockBox);
+                    bool Zcoll = !!collisionSystem::checkCollisionZ(playerBox, blockBox);
+
+                    if (!(Xcoll && Ycoll && Zcoll))
+                        currentDim->setBlock(hit.adjacentBlockPos.x, hit.adjacentBlockPos.y, hit.adjacentBlockPos.z, 1);
+  
                 }
             }
         }

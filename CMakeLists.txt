@@ -14,6 +14,12 @@ set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
+if(MSVC)
+  set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "EditAndContinue")
+  add_compile_options($<$<CONFIG:Debug>:/ZI>)
+  add_link_options($<$<CONFIG:Debug>:/INCREMENTAL>)
+endif()
+
 
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)

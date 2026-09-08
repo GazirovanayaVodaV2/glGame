@@ -10,6 +10,8 @@
 #include <glm/vec3.hpp>
 #include <glm/vec2.hpp>
 
+#include <ranges>
+
 struct vertex {
 	glm::vec3 pos, normal;
 	glm::vec2 uv;
@@ -75,4 +77,14 @@ public:
 
     const std::vector<vertex>& getVertices() const { return m_verticies; }
     const std::vector<unsigned int>& getIndices() const { return m_indicies; }
+    auto getUV() {
+        /*std::vector<glm::vec2> res;
+        for (auto& vert : m_verticies) {
+            res.emplace_back(vert.uv);
+        }
+        return res;*/
+        return m_verticies | std::views::transform([](const vertex& v) -> const glm::vec2& {
+            return v.uv;
+            });
+    }
 };

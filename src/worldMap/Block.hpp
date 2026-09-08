@@ -30,11 +30,12 @@ private:
 
 	collisionMesh m_collisionMesh;
 
-	void handeCollision(glm::vec3 mtv) override {};
+	void handleCollision(glm::vec3 mtv) override {};
 public:
     Block(basicModel& model, BlockMaterial material, BlockStats stats) 
-        : m_model(model), m_material(material), m_stats(stats) {
-		m_collisionMesh.push_back({ {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f} });
+        : m_model(model), m_material(material), m_stats(stats), 
+		m_collisionMesh({{{0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}}})
+	{
 	}
     void update() override {
         m_model.update();

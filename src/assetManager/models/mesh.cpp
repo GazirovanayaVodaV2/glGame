@@ -56,7 +56,7 @@ mesh::mesh(std::filesystem::path path)
 			std::cerr << "Assimp Error: " << importer.GetErrorString() << std::endl;
 			return;
 		}
-
+          
 		for (uint32_t i = 0; i < scene->mNumMeshes; i++) {
 			aiMesh* mesh = scene->mMeshes[i];
             unsigned int vertexOffset = static_cast<unsigned int>(m_verticies.size());
@@ -68,7 +68,7 @@ mesh::mesh(std::filesystem::path path)
                     mesh->mVertices[j].x,
                     mesh->mVertices[j].y,
                     mesh->mVertices[j].z
-                );
+                ); 
 
                 vertex.normal = glm::vec3(
                     mesh->mNormals[j].x,

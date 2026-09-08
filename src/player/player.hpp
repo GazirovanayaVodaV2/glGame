@@ -39,9 +39,9 @@ private:
     bool m_isSprinting = false;
     bool m_isFlying = false;
 
-    void handeCollision(glm::vec3 mtv);
+    void handleCollision(glm::vec3 mtv);
 public:
-    Player(glm::vec3 spawnPos = glm::vec3(0.0f, 20.0f, 0.0f));
+    Player(glm::vec3 spawnPos = glm::vec3(0.0f, 16.0f, 0.0f));
     ~Player() override = default;
 
     void draw(float alpha) override;
@@ -50,7 +50,8 @@ public:
     void MoveOn(glm::vec3 delta) override;
     void Rotate(glm::vec3 deltaRotation) override;
     glm::vec3 getPos() override { return m_transform.pos; }
-    glm::vec3 getVelocity()  { return m_velocity; }
+    glm::vec3 getVelocity() override { return m_velocity; }
+    void setVelocity(glm::vec3 vel) override { m_velocity = vel; };
     bool isGrounded() const { return m_onGround; }
     bool isFlying() const { return m_isFlying; }
     void setFlying(bool flying) { m_isFlying = flying; }

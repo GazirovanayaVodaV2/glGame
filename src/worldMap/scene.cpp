@@ -57,7 +57,7 @@ void chunk::update()
 
 				std::vector<SubChunkModel> newTerrainModels;
 				int blockId = 0;
-				for (const auto& rawMesh : rawData.meshes) {
+				for (const auto& rawMesh : rawData->meshes) {
 					if (rawMesh.vertices.empty() || rawMesh.indices.empty()) {
 						blockId++;
 						continue; // Skip empty meshes
@@ -220,33 +220,34 @@ void dimensionBase::loadChunksFromPos(glm::vec3 pos, int renderDistance, int see
 	int minZ = centerChunkZ - halfRenderDistance;
 	int maxZ = centerChunkZ + halfRenderDistance;
 
-	std::erase_if(m_loadedChunks, [minX, maxX, minZ, maxZ](const std::unique_ptr<chunk>& c) {
-		auto [chunkX, chunkZ] = c->getChunkPos();
-		bool shouldUnlocad = (chunkX < minX || chunkX > maxX || chunkZ < minZ || chunkZ > maxZ);
-		if (shouldUnlocad) {
+	std::erase_if(m_loadedChunks, [minX, maxX, minZ, maxZ](const auto& pair) {
+		const auto& [pos, c] = pair;
+		auto [chunkX, chunkZ] = pos;
+		bool shouldUnload = (chunkX < minX || chunkX > maxX || chunkZ < minZ || chunkZ > maxZ);
+		if (shouldUnload) {
 			c->safeToFile();
 		}
-		return shouldUnlocad;
+		return shouldUnload;
 		});
 
-	for (int i = minX; i < maxX; i++) {
-		for (int j = minZ; j < maxZ; j++) {
-			generateChunkPrep(i, j, seed);
+	for (int x = minX; x <= maxX; ++x) {
+		for (int z = minZ; z <= maxZ; ++z) {
+			generateChunkPrep(x, z, seed);
 		}
 	}
 }
 
 void dimensionBase::update()
 {
-	for (const auto& c : m_loadedChunks) {
-		c->update();
+	for (const auto& [pos, ch] : m_loadedChunks) {
+		ch->update();
 	}
 }
 
 void dimensionBase::draw(float alpha)
 {
-	for (const auto& c : m_loadedChunks) {
-		c->draw(alpha);
+	for (const auto& [pos, ch] : m_loadedChunks) {
+		ch->draw(alpha);
 	}
 }
 
@@ -295,20 +296,21 @@ int dimensionBase::getBlockMeta(int x, int y, int z)
 
 void dimensionBase::saveAllLoadedChunks()
 {
-	for (auto& chunks : m_loadedChunks) {
+	for (auto& [pos, chunks] : m_loadedChunks) {
 		chunks->safeToFile();
 	}
 }
 
 void dimensionBase::generateChunkPrep(int xid, int yid, int seed)
 {
-	bool alreadyLoaded = std::any_of(m_loadedChunks.begin(), m_loadedChunks.end(), [xid, yid](const std::unique_ptr<chunk>& c) {
-		auto [chunkX, chunkY] = c->getChunkPos();
-		return chunkX == xid && chunkY == yid;
-		});
+	chunkPosT pos{ xid, yid };
 
-	if (!alreadyLoaded) {
-		m_loadedChunks.emplace_back(std::make_unique<chunk>(xid, yid, generateChunk(xid, yid), worldPath));
+	if (auto it = m_loadedChunks.find(pos); it == m_loadedChunks.end()) {
+		m_loadedChunks.emplace_hint(
+			it,
+			pos,
+			std::make_unique<chunk>(xid, yid, generateChunk(xid, yid), worldPath)
+		);
 	}
 }
 
@@ -377,7 +379,7 @@ void world::draw(float alpha)
 
 		for (auto& obj : m_globalObjects) {
 			obj->draw(alpha);
-			obj->drawDebugAABB();
+			//obj->drawDebugAABB();
 		}
 	} 
 }
@@ -390,17 +392,23 @@ void world::update()
 		for (auto& obj : m_globalObjects) {
 			obj->SaveStateForInterpolation();
 			obj->update();
+
 			if (obj->getPos().y < -100.0f) {
 				obj->MoveTo({0, worldConstants::HEIGHT, 0});
 			}
 
 			auto objPos = obj->getPos();
-			int minX = static_cast<int>(std::floor(objPos.x - 1.0f));
-			int maxX = static_cast<int>(std::floor(objPos.x + 1.0f));
-			int minY = static_cast<int>(std::floor(objPos.y - 1.0f));
-			int maxY = static_cast<int>(std::floor(objPos.y + 2.0f));
-			int minZ = static_cast<int>(std::floor(objPos.z - 1.0f));
-			int maxZ = static_cast<int>(std::floor(objPos.z + 1.0f));
+			auto& objCollMehs = obj->getCollisionMesh();
+			const auto& objGlobalBox = objCollMehs.globalBounds;
+
+			int minX = static_cast<int>(std::floor(objPos.x + objGlobalBox.min.x));
+			int maxX = static_cast<int>(std::ceil(objPos.x + objGlobalBox.max.x));
+
+			int minY = static_cast<int>(std::floor(objPos.y + objGlobalBox.min.y));
+			int maxY = static_cast<int>(std::ceil(objPos.y + objGlobalBox.max.y));
+
+			int minZ = static_cast<int>(std::floor(objPos.z + objGlobalBox.min.z));
+			int maxZ = static_cast<int>(std::ceil(objPos.z + objGlobalBox.max.z));
 
 			collisionMesh nearbyBlocksBoxes;
 
@@ -417,13 +425,14 @@ void world::update()
 
 						glm::vec3 blockWorldPos(x,y,z);
 						for (const auto& localBox : localBoxes) {
-							nearbyBlocksBoxes.push_back(localBox.offset(blockWorldPos));
+							nearbyBlocksBoxes->push_back(localBox.offset(blockWorldPos));
 						}
 					}
 				}
 			}
 
-			if (!nearbyBlocksBoxes.empty()) {
+			if (!nearbyBlocksBoxes->empty()) {
+				nearbyBlocksBoxes.calculateGlobalBoxes();
 				obj->checkCollision(nearbyBlocksBoxes, Transform{});
 			}
 		}
@@ -442,13 +451,18 @@ std::shared_ptr<chunkBuffers> overworld::generateChunk(int xid, int yid)
 		for (int z = 0; z < worldConstants::LENGTH; z++) {
 			newgen->blocks->setBlock(x, 0, z, 3);
 			newgen->blockMeta->setMeta(x, 0, z, 0);
-			for (int y = 1; y < 10; y++) {
+			for (int y = 1; y < 8; y++) {
 				newgen->blocks->setBlock(x, y, z, 1);
 				newgen->blockMeta->setMeta(x, y, z, 0);
 			}
 
-			newgen->blocks->setBlock(x, 10, z, 2);
+			newgen->blocks->setBlock(x, 10, z, 5);
 			newgen->blockMeta->setMeta(x, 10, z, 0);
+
+			newgen->blocks->setBlock(x, 9, z, 4);
+			newgen->blockMeta->setMeta(x, 9, z, 0);
+			newgen->blocks->setBlock(x, 8, z, 4);
+			newgen->blockMeta->setMeta(x, 8, z, 0);
 
 			(*newgen->heightMap)[x + z * worldConstants::WIDTH] = 10;
 		}	
@@ -457,12 +471,9 @@ std::shared_ptr<chunkBuffers> overworld::generateChunk(int xid, int yid)
 	return newgen;
 }
 
-
-ChunkRawData meshBuilder::buildMesh(const blockArray& blocks, const blockMetaArray& blockMeta, const heightMapArray& heightMap)
+std::unique_ptr<ChunkRawData> meshBuilder::buildMesh(const blockArray& blocks, const blockMetaArray& blockMeta, const heightMapArray& heightMap)
 {
-	std::array<std::vector<vertex>, 256> verticesMap;
-	std::array<std::vector<unsigned int>, 256> indicesMap;
-
+	auto result = std::make_unique<ChunkRawData>();
 	auto& block_array = blocks.m_array;
 
 	auto isSolid = [&block_array](int x, int y, int z) -> bool {
@@ -477,13 +488,14 @@ ChunkRawData meshBuilder::buildMesh(const blockArray& blocks, const blockMetaArr
 	auto addFace = [](std::vector<vertex>& vertices, std::vector<unsigned int>& indices,
 		const glm::vec3& p0, const glm::vec3& p1,
 		const glm::vec3& p2, const glm::vec3& p3,
-		const glm::vec3& normal)
+		const glm::vec3& normal,
+		const glm::vec2 uvs[4])
 		{
 			unsigned int indexOffset = static_cast<unsigned int>(vertices.size());
-			vertices.emplace_back(p0, normal, glm::vec2{ 0.0f, 0.0f });
-			vertices.emplace_back(p1, normal, glm::vec2{ 1.0f, 0.0f });
-			vertices.emplace_back(p2, normal, glm::vec2{ 1.0f, 1.0f });
-			vertices.emplace_back(p3, normal, glm::vec2{ 0.0f, 1.0f });
+			vertices.emplace_back(p0, normal, uvs[0]);
+			vertices.emplace_back(p1, normal, uvs[1]);
+			vertices.emplace_back(p2, normal, uvs[2]);
+			vertices.emplace_back(p3, normal, uvs[3]);
 
 			indices.push_back(indexOffset + 0);
 			indices.push_back(indexOffset + 1);
@@ -493,6 +505,62 @@ ChunkRawData meshBuilder::buildMesh(const blockArray& blocks, const blockMetaArr
 			indices.push_back(indexOffset + 3);
 		};
 
+	auto getFaceUVs = [](int id, int faceIndex, glm::vec2 outUVs[4]) {
+		auto blockUVs = BlockTable::getBlock(id)->getMesh().getUV();
+		size_t count = blockUVs.size();
+
+		if (count >= 24 && count < 36) {
+			constexpr int TopInd[] = { 5,13,21,22 };
+			constexpr int BottonInd[] = { 6,5,22,18 };
+			constexpr int RightInd[] = { 7,1,5,6 };
+			constexpr int LeftInd[] = { 1,9,13,5 };
+			constexpr int FrontInd[] = { 3,0,1,2 };
+			constexpr int BackInd[] = { 0,8,9,10 };
+
+			const int* arr = TopInd;
+			switch (faceIndex) {
+			case 0: arr = TopInd; break;
+			case 1: arr = BottonInd; break;
+			case 2: arr = RightInd; break;
+			case 3: arr = LeftInd; break;
+			case 4: arr = FrontInd; break;
+			case 5: arr = BackInd; break;
+			}
+
+			outUVs[0] = blockUVs[arr[0]];
+			outUVs[1] = blockUVs[arr[1]];
+			outUVs[2] = blockUVs[arr[2]];
+			outUVs[3] = blockUVs[arr[3]];
+
+		}
+		else if (count >= 36) {
+			// Для блоков с 36 вершинами (земля/камень) метод Bounding Box работает идеально
+			size_t offset = faceIndex * 6;
+			glm::vec2 uv_min = blockUVs[offset];
+			glm::vec2 uv_max = blockUVs[offset];
+
+			for (size_t i = 1; i < 6; ++i) {
+				glm::vec2 uv = blockUVs[offset + i];
+				uv_min.x = std::min(uv_min.x, uv.x);
+				uv_min.y = std::min(uv_min.y, uv.y);
+				uv_max.x = std::max(uv_max.x, uv.x);
+				uv_max.y = std::max(uv_max.y, uv.y);
+			}
+
+			outUVs[0] = { uv_min.x, uv_min.y };
+			outUVs[1] = { uv_max.x, uv_min.y };
+			outUVs[2] = { uv_max.x, uv_max.y };
+			outUVs[3] = { uv_min.x, uv_max.y };
+		}
+		else {
+			outUVs[0] = { 0.0f, 0.0f };
+			outUVs[1] = { 1.0f, 0.0f };
+			outUVs[2] = { 1.0f, 1.0f };
+			outUVs[3] = { 0.0f, 1.0f };
+		}
+		};
+
+
 	for (int x = 0; x < worldConstants::WIDTH; ++x) {
 		for (int z = 0; z < worldConstants::LENGTH; ++z) {
 			int maxHeight = std::clamp(heightMap[x + z * worldConstants::WIDTH], 0, worldConstants::HEIGHT - 1);
@@ -501,41 +569,49 @@ ChunkRawData meshBuilder::buildMesh(const blockArray& blocks, const blockMetaArr
 				int blockId = block_array[chunk::getIndex(x, y, z)];
 				if (blockId == 0) continue;
 
-				auto& verts = verticesMap[blockId];
-				auto& inds = indicesMap[blockId];
+				auto& rawMesh = result->meshes[blockId];
+				auto& verts = rawMesh.vertices;
+				auto& inds = rawMesh.indices;
 
-				if (verts.capacity() == 0) {
-					verts.reserve(1000);
-				}
-				if (inds.capacity() == 0) {
-					inds.reserve(1500);
-				}
+				if (verts.capacity() == 0) verts.reserve(1000);
+				if (inds.capacity() == 0) inds.reserve(1500);
 
+				
+			
 				glm::vec3 pos(x, y, z);
+				glm::vec2 faceUVs[4];
 
-				if (!isSolid(x, y + 1, z))
-					addFace(verts, inds, pos + glm::vec3(0, 1, 1), pos + glm::vec3(1, 1, 1), pos + glm::vec3(1, 1, 0), pos + glm::vec3(0, 1, 0), { 0.0f, 1.0f, 0.0f });
-				if (!isSolid(x, y - 1, z))
-					addFace(verts, inds, pos + glm::vec3(0, 0, 0), pos + glm::vec3(1, 0, 0), pos + glm::vec3(1, 0, 1), pos + glm::vec3(0, 0, 1), { 0.0f, -1.0f, 0.0f });
-				if (!isSolid(x + 1, y, z))
-					addFace(verts, inds, pos + glm::vec3(1, 0, 1), pos + glm::vec3(1, 0, 0), pos + glm::vec3(1, 1, 0), pos + glm::vec3(1, 1, 1), { 1.0f, 0.0f, 0.0f });
-				if (!isSolid(x - 1, y, z))
-					addFace(verts, inds, pos + glm::vec3(0, 0, 0), pos + glm::vec3(0, 0, 1), pos + glm::vec3(0, 1, 1), pos + glm::vec3(0, 1, 0), { -1.0f, 0.0f, 0.0f });
-				if (!isSolid(x, y, z + 1))
-					addFace(verts, inds, pos + glm::vec3(0, 0, 1), pos + glm::vec3(1, 0, 1), pos + glm::vec3(1, 1, 1), pos + glm::vec3(0, 1, 1), { 0.0f, 0.0f, 1.0f });
-				if (!isSolid(x, y, z - 1))
-					addFace(verts, inds, pos + glm::vec3(1, 0, 0), pos + glm::vec3(0, 0, 0), pos + glm::vec3(0, 1, 0), pos + glm::vec3(1, 1, 0), { 0.0f, 0.0f, -1.0f });
+				// Top (Y+) - Face 0
+				if (!isSolid(x, y + 1, z)) {
+					getFaceUVs(blockId , 0, faceUVs);
+					addFace(verts, inds, pos + glm::vec3(0, 1, 1), pos + glm::vec3(1, 1, 1), pos + glm::vec3(1, 1, 0), pos + glm::vec3(0, 1, 0), { 0.0f, 1.0f, 0.0f }, faceUVs);
+				}
+				// Bottom (Y-) - Face 1
+				if (!isSolid(x, y - 1, z)) {
+					getFaceUVs(blockId, 1, faceUVs);
+					addFace(verts, inds, pos + glm::vec3(0, 0, 0), pos + glm::vec3(1, 0, 0), pos + glm::vec3(1, 0, 1), pos + glm::vec3(0, 0, 1), { 0.0f, -1.0f, 0.0f }, faceUVs);
+				}
+				// Right (X+) - Face 2
+				if (!isSolid(x + 1, y, z)) {
+					getFaceUVs(blockId, 2, faceUVs);
+					addFace(verts, inds, pos + glm::vec3(1, 0, 1), pos + glm::vec3(1, 0, 0), pos + glm::vec3(1, 1, 0), pos + glm::vec3(1, 1, 1), { 1.0f, 0.0f, 0.0f }, faceUVs);
+				}
+				// Left (X-) - Face 3
+				if (!isSolid(x - 1, y, z)) {
+					getFaceUVs(blockId, 3, faceUVs);
+					addFace(verts, inds, pos + glm::vec3(0, 0, 0), pos + glm::vec3(0, 0, 1), pos + glm::vec3(0, 1, 1), pos + glm::vec3(0, 1, 0), { -1.0f, 0.0f, 0.0f }, faceUVs);
+				}
+				// Front (Z+) - Face 4
+				if (!isSolid(x, y, z + 1)) {
+					getFaceUVs(blockId, 4, faceUVs);
+					addFace(verts, inds, pos + glm::vec3(0, 0, 1), pos + glm::vec3(1, 0, 1), pos + glm::vec3(1, 1, 1), pos + glm::vec3(0, 1, 1), { 0.0f, 0.0f, 1.0f }, faceUVs);
+				}
+				// Back (Z-) - Face 5
+				if (!isSolid(x, y, z - 1)) {
+					getFaceUVs(blockId, 5, faceUVs);
+					addFace(verts, inds, pos + glm::vec3(1, 0, 0), pos + glm::vec3(0, 0, 0), pos + glm::vec3(0, 1, 0), pos + glm::vec3(1, 1, 0), { 0.0f, 0.0f, -1.0f }, faceUVs);
+				}
 			}
-		}
-	}
-
-	ChunkRawData result;
-	for (int blockId = 0; blockId < verticesMap.size(); ++blockId) {
-		if (!verticesMap[blockId].empty()) {
-			result.meshes[blockId] = RawMeshData{
-				std::move(verticesMap[blockId]),
-				std::move(indicesMap[blockId])
-			};
 		}
 	}
 	return result;

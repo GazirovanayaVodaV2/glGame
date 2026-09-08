@@ -8,7 +8,7 @@
 
 class ISceneObject : public Icontrollable, public Idrawable {
 protected:
-    virtual void handeCollision(glm::vec3 mtv) = 0;
+    virtual void handleCollision(glm::vec3 mtv) = 0;
 public:
     virtual void update() = 0;
     virtual ~ISceneObject() = default;

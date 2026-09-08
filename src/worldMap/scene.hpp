@@ -18,15 +18,24 @@
 #include <thread>
 #include <algorithm>
 
+using chunkPosT = std::pair<int, int>;
+
+struct ChunkPosHash {
+	std::size_t operator()(const chunkPosT& pos) const noexcept {
+		return (static_cast<std::uint64_t>(pos.first) << 32) |
+			static_cast<std::uint32_t>(pos.second);
+	}
+};
+
 namespace worldConstants {
 	static constexpr int WIDTH = 16;
 	static constexpr int LENGTH = 16;
 	static constexpr int HEIGHT = 256;
 	static constexpr int CHUNK_VOLUME = WIDTH * LENGTH * HEIGHT;
 
-	constexpr float gravity = 0.98f;
+	constexpr float gravity = 0.08f;
 
-	inline std::pair<int, int> worldCoordToChunkCoord(float x, float z)
+	inline chunkPosT worldCoordToChunkCoord(float x, float z)
 	{
 		auto _x = static_cast<int>(std::floor(x));
 		auto _z = static_cast<int>(std::floor(z));
@@ -71,7 +80,7 @@ public:
 	meshBuilder() = default;
 	~meshBuilder() = default;
 
-	ChunkRawData buildMesh(const blockArray& blocks, const blockMetaArray& blockMeta, const heightMapArray& heightMap);
+	std::unique_ptr<ChunkRawData> buildMesh(const blockArray& blocks, const blockMetaArray& blockMeta, const heightMapArray& heightMap);
 };
 
 struct chunkBuffers {
@@ -101,7 +110,7 @@ private:
 	std::vector<chunkChanges> m_changes;
 	std::vector<SubChunkModel> m_terrainModels;
 
-	std::future<ChunkRawData> m_meshFuture;
+	std::future<std::unique_ptr<ChunkRawData>> m_meshFuture;
 	bool m_isBuildingMesh = false;
 
 	std::filesystem::path* worldPath = nullptr;
@@ -136,7 +145,7 @@ public:
 	int getBlock(int lx, int ly, int lz);
 	int getBlockMeta(int lx, int ly, int lz);
 
-	std::pair<int, int> getChunkPos() {
+	chunkPosT getChunkPos() {
 		return { ix, iy };
 	}
 
@@ -145,6 +154,10 @@ public:
 
 	std::vector<SubChunkModel>& getTerrainModel() {
 		return m_terrainModels;
+	}
+
+	bool isLoaded() {
+		return loaded;
 	}
 };
 
@@ -176,8 +189,9 @@ struct worldRules {
 
 class dimensionBase {
 protected:
-	std::vector<std::unique_ptr<chunk>> m_loadedChunks;
-	glm::vec2 pastRenderPos;
+	//std::vector<> m_loadedChunks;
+	std::unordered_map<chunkPosT, std::unique_ptr<chunk>, ChunkPosHash> m_loadedChunks;
+	glm::vec2 pastRenderPos{};
 	std::filesystem::path* worldPath = nullptr;
 
 	void generateChunkPrep(int xid, int yid, int seed);
@@ -198,13 +212,8 @@ public:
 
 	chunk* getChunk(int chunkX, int chunkZ)
 	{
-		for (auto& ch : m_loadedChunks) {
-			auto chunkPos = ch->getChunkPos();
-			if (ch && chunkPos.first == chunkX && chunkPos.second == chunkZ) {
-				return ch.get();
-			}
-		}
-		return nullptr;
+		auto it = m_loadedChunks.find({ chunkX, chunkZ });
+		return (it != m_loadedChunks.end()) ? it->second.get() : nullptr;
 	}
 
 	void saveAllLoadedChunks();

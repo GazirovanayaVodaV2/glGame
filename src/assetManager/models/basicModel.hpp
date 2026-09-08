@@ -20,11 +20,8 @@ private:
 	std::string m_textureName, m_meshName, m_shaderName;
 	collisionMesh m_collisionMesh;
 
-	void initCollisionMesh() {
-		m_collisionMesh.push_back({ {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f} });
-	}
 
-	void handeCollision(glm::vec3 mtv) override {};
+	void handleCollision(glm::vec3 mtv) override {};
 public:
 	basicModel() = delete;
 	basicModel(std::string textureName, std::string meshName, std::string shaderName) 
@@ -33,9 +30,9 @@ public:
 		m_mesh(mainAssetManager::get<mesh>(meshName)),
 		m_textureName(textureName),
 		m_meshName(meshName),
-		m_shaderName(shaderName)
+		m_shaderName(shaderName),
+		m_collisionMesh({ { {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f} } })
 	{
-		initCollisionMesh();
 	}
 
 	basicModel(std::string textureName, mesh& mesh, std::string shaderName)
@@ -44,9 +41,9 @@ public:
 		m_mesh(mesh),
 		m_textureName(textureName),
 		m_meshName(std::string()),
-		m_shaderName(shaderName)
+		m_shaderName(shaderName),
+		m_collisionMesh({ { {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f} } })
 	{
-		initCollisionMesh();
 	}
 
 	basicModel(const basicModel&) = delete;

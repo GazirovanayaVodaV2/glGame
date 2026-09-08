@@ -1,32 +1,34 @@
+#include <algorithm>
+#include <iostream>
+
 #include "player.hpp"
 #include "timer.hpp"
-#include <algorithm>
 
 #include "../glfwContext.hpp"
 
 
-void Player::handeCollision(glm::vec3 mtv)
+void Player::handleCollision(glm::vec3 mtv)
 {
     MoveOn(mtv);
-    m_onGround = true;
+    m_onGround = mtv.y > 0.0f;
 }
 
 Player::Player(glm::vec3 spawnPos)
+: m_collisionMesh({{{-0.3f, 0.0f, -0.3f}, {0.3f, 1.8f, 0.3f}}})
 {
     m_model = std::make_unique<basicModel>("steve", "steve", "blockShader");
     m_model->Scale({0.5,0.5,0.5});
     m_model->MoveTo(spawnPos);
-    m_collisionMesh.push_back({ {-0.3f, 0.0f, -0.3f}, {0.3f, 1.8f, 0.3f} });
     glfwContext::addCycleEvent([this]() { keyCallback(); }, true); //TEMP
     Camera::connectToObject(this);
-    Camera::setOffset({0.0, 1.8f, 0.0f});
+    Camera::setOffset({0.0, 1.6f, 0.0f});
 
     MoveTo(spawnPos);
 }
 
 void Player::draw(float alpha) {
     if (m_mode != gameMode::SPECTATOR && m_model) {
-        m_model->draw(alpha); //Model goin crazy so i fix this later
+        //m_model->draw(alpha); //Model goin crazy so i fix this later
     }
 }
 
@@ -36,6 +38,8 @@ void Player::update() {
     Rotate player model
     
     */
+    //std::cout << getPos().y << std::endl;
+
     auto cameraFront = Camera::getFront();
     auto cameraFrontXZ = glm::normalize(glm::vec3(cameraFront.x, 0.0f, cameraFront.z));
     //float targetYaw = glm::degrees(glm::atan(cameraFrontXZ.x, cameraFrontXZ.z));
@@ -55,7 +59,7 @@ void Player::update() {
         m_velocity *= 0.6;
     }
     if (!m_onGround) {
-       // m_velocity += glm::vec3(0.0f, -worldConstants::gravity, 0.0f);
+        m_velocity.y = (m_velocity.y - worldConstants::gravity) * 0.98;
     }
     MoveOn(m_velocity);
  
@@ -89,6 +93,12 @@ void Player::moveByKeyBoard(MoveDirection dir)
     if (dir == MoveDirection::Right)
         moveDir += right;
 
+    if (dir == MoveDirection::Jump) {
+        if (m_onGround) {
+            m_velocity.y = 1.0f;
+        }
+    }
+
     if (glm::length(moveDir) > 0.0f) {
         moveDir = glm::normalize(moveDir);
     }
@@ -112,6 +122,10 @@ void Player::keyCallback()
     }
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
         moveByKeyBoard(MoveDirection::Right);
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
+        moveByKeyBoard(MoveDirection::Jump);
     }
 }
 

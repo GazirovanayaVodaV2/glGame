@@ -1,3 +1,5 @@
+#include <array>
+
 #include "ISceneObject.hpp"
 
 #include "../assetManager/assetManager.hpp"
@@ -6,15 +8,69 @@
 
 glm::vec3 ISceneObject::checkCollision(const collisionMesh& otherCollisionMesh, const Transform& transform)
 {
-    //to do rewrite collisions
-    glm::vec3 correction{};
-    if (glm::dot(correction, correction) > 1e-6f) {
-        handeCollision(correction);
-        return correction;
+    constexpr int MAX_ITERATIONS = 16;
+    constexpr float EPSILON = 0.0000001f;
+
+    glm::vec3 virtualPos = getPos();
+    glm::vec3 totalAccumulatedMtv{ 0.0f };
+
+    for (int iteration = 0; iteration < MAX_ITERATIONS; ++iteration) {
+        bool collisionResolvedThisStep = false;
+        float minOverlapFound = std::numeric_limits<float>::max();
+        glm::vec3 bestMtvThisStep{ 0.0f };
+
+        for (const auto& myCollider : getCollisionMesh()) {
+            collisionSystem::AABB boxA = myCollider.offset(virtualPos);
+
+            for (const auto& obj : otherCollisionMesh) {
+                collisionSystem::AABB boxB = obj.offset(transform.pos);
+
+                float mtvX = collisionSystem::checkCollisionX(boxA, boxB);
+                float mtvY = collisionSystem::checkCollisionY(boxA, boxB);
+                float mtvZ = collisionSystem::checkCollisionZ(boxA, boxB);
+
+                if (std::abs(mtvX) > EPSILON && std::abs(mtvY) > EPSILON && std::abs(mtvZ) > EPSILON) {
+                    float absX = std::abs(mtvX), absY = std::abs(mtvY), absZ = std::abs(mtvZ);
+                    glm::vec3 currentLocalMtv{ 0.0f };
+                    float overlapLength = 0.0f;
+
+                    if (absX <= absY && absX <= absZ) {
+                        currentLocalMtv.x = mtvX;
+                        overlapLength = absX;
+                    }
+                    else if (absY <= absX && absY <= absZ) {
+                        currentLocalMtv.y = mtvY;
+                        overlapLength = absY;
+                    }
+                    else {
+                        currentLocalMtv.z = mtvZ;
+                        overlapLength = absZ;
+                    }
+
+                    if (overlapLength < minOverlapFound) {
+                        minOverlapFound = overlapLength;
+                        bestMtvThisStep = currentLocalMtv;
+                        collisionResolvedThisStep = true;
+                    }
+                }
+            }
+        }
+
+        if (!collisionResolvedThisStep) {
+            break;
+        }
+
+        virtualPos += bestMtvThisStep;
+        totalAccumulatedMtv += bestMtvThisStep;
     }
 
-    return {};
+    if (glm::dot(totalAccumulatedMtv, totalAccumulatedMtv) > EPSILON) {
+        handleCollision(totalAccumulatedMtv);
+    }
+
+    return totalAccumulatedMtv;
 }
+
 void ISceneObject::drawDebugAABB()
 {
     for (auto& meshes : getCollisionMesh()) {
