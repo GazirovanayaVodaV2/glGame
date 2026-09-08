@@ -39,6 +39,8 @@ private:
     bool m_isSprinting = false;
     bool m_isFlying = false;
 
+    int m_currentBLock = 1; // Temp
+
     void handleCollision(glm::vec3 mtv);
 public:
     Player(glm::vec3 spawnPos = glm::vec3(0.0f, 16.0f, 0.0f));
@@ -72,6 +74,7 @@ public:
 
     void moveByKeyBoard(MoveDirection dir);
     void keyCallback();
+    void mouseCallBack();
 
     void SaveStateForInterpolation() override {
         m_lastState = m_transform;

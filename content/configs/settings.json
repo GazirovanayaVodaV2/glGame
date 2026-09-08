@@ -1,7 +1,7 @@
 {
     "windowName": "game",
     "resolution": [1366, 768],
-    "vsync": false,
+    "vsync": true,
     "fps": 900,
     "fullScreen": false,
     "resizeable": false

@@ -3,7 +3,7 @@ out vec4 FragColor;
 
 in vec2 TexCoords;
 
-uniform sampler2D skyboxTex; // basicModel передает 2D-текстуру
+uniform sampler2D skyboxTex; 
 
 void main()
 {

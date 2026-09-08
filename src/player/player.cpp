@@ -6,6 +6,7 @@
 
 #include "../glfwContext.hpp"
 
+#include "../Raycast.hpp"
 
 void Player::handleCollision(glm::vec3 mtv)
 {
@@ -63,6 +64,8 @@ void Player::update() {
     }
     MoveOn(m_velocity);
  
+    mouseCallBack();
+
     m_onGround = false;
 }
 
@@ -127,6 +130,48 @@ void Player::keyCallback()
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
         moveByKeyBoard(MoveDirection::Jump);
     }
+
+    for (int i = 0; i <= 9;i++) {
+        if (glfwGetKey(window, i + 48) == GLFW_PRESS) {
+            std::cout << i << std::endl;
+            m_currentBLock = std::clamp(i,1, (int)BlockTable::getSize());
+        }
+    }
+}
+
+void Player::mouseCallBack()
+{
+    auto currentWorld = worldManager::getCurrentWorld();
+    if (currentWorld) {
+        auto currentDimension = currentWorld->getCurrentDimension();
+        if (currentDimension) {
+            auto window = glfwContext::getWindow();
+            bool leftMouse = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+            bool rightMouse = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
+            
+            if (leftMouse || rightMouse) {
+                RaycastHit hit = raycastVoxels(currentDimension, Camera::getPos(), Camera::getFront(), 5.0f);
+                if (hit.type == RaycastHit::HitType::Block) {
+                    if (leftMouse) {
+                        currentDimension->setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, 0);
+                    }
+                    if (rightMouse) {
+                        auto playerBox = getCollisionMesh().globalBounds.offset(getPos());
+                        collisionSystem::AABB blockBox{ glm::vec3(hit.adjacentBlockPos), glm::vec3(hit.adjacentBlockPos) + glm::vec3(1,1,1) };
+
+                        bool Xcoll = !!collisionSystem::checkCollisionX(playerBox, blockBox);
+                        bool Ycoll = !!collisionSystem::checkCollisionY(playerBox, blockBox);
+                        bool Zcoll = !!collisionSystem::checkCollisionZ(playerBox, blockBox);
+                        std::cout << "Place " << m_currentBLock << std::endl;
+                        if (!(Xcoll && Ycoll && Zcoll))
+                            currentDimension->setBlock(hit.adjacentBlockPos.x, hit.adjacentBlockPos.y, hit.adjacentBlockPos.z, m_currentBLock);
+    
+                    }
+                }
+            }
+        }
+    }
+    
 }
 
 void Player::MoveTo(glm::vec3 dest) {

@@ -12,9 +12,10 @@
 struct GameState {
     world* currentWorld = nullptr;
     Player* player = nullptr;
+    int currentBlock = 1;
 };
 
-int main() {
+int main() {   
     glfwContext::init();
     mainAssetManager::add<shader>("debugShader", "shaders/debug.glsl", "shaders/debug_frag.glsl");
     mainAssetManager::add<shader>("blockShader", "shaders/block.glsl", "shaders/block_frag.glsl");
@@ -52,40 +53,8 @@ int main() {
     auto player = std::make_unique<Player>(glm::vec3(0.0f, 16.0f, 0.0f));
     currentWorld->addGlobalObject(player.get());
     GameState gameState{ currentWorld, player.get() };
-    glfwSetWindowUserPointer(glfwContext::getWindow(), &gameState);
         
     glfwSetCursorPosCallback(glfwContext::getWindow(), Camera::mouseCallback);
-    glfwSetMouseButtonCallback(glfwContext::getWindow(), [](GLFWwindow* window, int button, int action, int mods) {
-        auto* state = static_cast<GameState*>(glfwGetWindowUserPointer(window));
-        if (!state || !state->currentWorld) return;
-
-        dimensionBase* currentDim = state->currentWorld->getCurrentDimension();
-        if (!currentDim) return;
-
-        if (action == GLFW_PRESS) {
-            RaycastHit hit = raycastVoxels(currentDim, Camera::getPos(), Camera::getFront(), 5.0f);
-
-            if (hit.type == RaycastHit::HitType::Block) {
-                if (button == GLFW_MOUSE_BUTTON_LEFT) {
-                    currentDim->setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, 0);
-                }
-                else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
-                    auto playerBox = state->player->getCollisionMesh().globalBounds.offset(state->player->getPos());
-
-                    collisionSystem::AABB blockBox{ glm::vec3(hit.adjacentBlockPos), glm::vec3(hit.adjacentBlockPos) + glm::vec3(1,1,1) };
-
-                    bool Xcoll = !!collisionSystem::checkCollisionX(playerBox, blockBox);
-                    bool Ycoll = !!collisionSystem::checkCollisionY(playerBox, blockBox);
-                    bool Zcoll = !!collisionSystem::checkCollisionZ(playerBox, blockBox);
-
-                    if (!(Xcoll && Ycoll && Zcoll))
-                        currentDim->setBlock(hit.adjacentBlockPos.x, hit.adjacentBlockPos.y, hit.adjacentBlockPos.z, 1);
-  
-                }
-            }
-        }
-        });
-
 
    /* glfwContext::addCycleEvent([player = player.get()]() {
         world* currentWorld = worldManager::getCurrentWorld();
