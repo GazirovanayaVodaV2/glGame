@@ -1,5 +1,7 @@
 Проект для практики opengl, а так же создание собственного клона Minecraft.
 
+Используется Opengl 3.3 (С целью совместимости со старыми устройствами), [glfw](https://github.com/glfw/glfw), [glm](https://github.com/g-truc/glm), [stb](https://github.com/nothings/stb), [assimp](https://github.com/assimp/assimp) и [Nlohmann json](https://github.com/nlohmann/json)
+
 ![alt text](image.png)
 
 Есть несколько вещей которые я планирую переделать:
