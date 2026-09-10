@@ -9,6 +9,8 @@
 #include "textures/texture.hpp"
 #include "assetManager/models/mesh.hpp"
 
+
+/*Vibe coded*/
 template <typename T>
 struct assetContainerTraits {
 	using keyType = std::string;
