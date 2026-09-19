@@ -30,20 +30,26 @@ chunk::chunk(int xid, int yid, std::shared_ptr<chunkBuffers> buffers, std::files
 
 void chunk::compress()
 {
-	compressed = true;
+	if (!compressed && isMeshBuilded()) {
+		m_compressedChunk.compress(m_buffers->blocks->m_array);
+		m_compressedChunkMeta.compress(m_buffers->blockMeta->m_array);
 
-	m_compressedChunk.compress(m_buffers->blocks->m_array);
-	m_compressedChunkMeta.compress(m_buffers->blockMeta->m_array);
+		m_buffers->blocks->m_array.clear();
+		m_buffers->blocks->m_array.shrink_to_fit();
+		m_buffers->blockMeta->m_array.clear();
+		m_buffers->blockMeta->m_array.shrink_to_fit();
 
-	m_buffers->blocks->m_array.clear();
-	m_buffers->blockMeta->m_array.clear();
+		compressed = true;
+	}
 }
 
 void chunk::decompress()
 {
-	m_buffers->blocks->m_array = std::move(m_compressedChunk.decompress());	
-	m_buffers->blockMeta->m_array = std::move(m_compressedChunkMeta.decompress());
-	compressed = false;		
+	if (compressed) {
+		m_compressedChunk.decompress(m_buffers->blocks->m_array);
+		m_compressedChunkMeta.decompress(m_buffers->blockMeta->m_array);
+		compressed = false;
+	}
 }
 
 void chunk::update()
@@ -65,7 +71,7 @@ void chunk::update()
 				return builder.buildMesh(blocks, meta, height);
 				});
 		}*/
-		if (meshBuilderDirty && !m_isBuildingMesh && !compressed) {
+		if (meshBuilderDirty && !m_isBuildingMesh) {
 			m_isBuildingMesh = true;
 			meshBuilderDirty = false;
 			m_meshFuture = threadPool::instance().enqueue([blocks = *m_buffers->blocks,
@@ -276,22 +282,18 @@ void dimensionBase::loadChunksFromPos(glm::vec3 pos, int renderDistance, int see
 		}
 	}
 
-	int radius = 4;
-	int minX_r4 = centerChunkX - radius;
-	int maxX_r4 = centerChunkX + radius;
-	int minZ_r4 = centerChunkZ - radius;
-	int maxZ_r4 = centerChunkZ + radius;
+	int activeRadius = 2; 
+    for (auto& [chunkPos, chunkPtr] : m_loadedChunks) {
+        auto [cx, cz] = chunkPos;
+        bool inActiveZone = (std::abs(cx - centerChunkX) <= activeRadius && 
+                             std::abs(cz - centerChunkZ) <= activeRadius);
 
-	for (auto& [chunkPos, chunkPtr] : m_loadedChunks) {
-		auto [cx, cz] = chunkPos;
-
-
-		if (cx >= minX_r4 && cx <= maxX_r4 && cz >= minZ_r4 && cz <= maxZ_r4) {
-			chunkPtr->decompress();
-		} else {
-			chunkPtr->compress();
-		}
-	}
+        if (inActiveZone) {
+            chunkPtr->decompress();
+        } else {
+            chunkPtr->compress();
+        }
+    }
 }
 
 void dimensionBase::update()
@@ -530,13 +532,13 @@ std::shared_ptr<chunkBuffers> overworld::generateChunk(int xid, int yid)
 
 std::unique_ptr<ChunkRawData> meshBuilder::buildMesh(const blockArray& blocks, const blockMetaArray& blockMeta, const heightMapArray& heightMap)
 {
+	auto& block_array = blocks.m_array;
+
 	thread_local auto threadLocalCache = std::make_unique<ChunkRawData>(); 
     for (auto& mesh : threadLocalCache->meshes) {
         mesh.vertices.clear();
         mesh.indices.clear();
     }
-
-	auto& block_array = blocks.m_array;
 
 	auto isSolid = [&block_array](int x, int y, int z) -> bool {
 		if (x < 0 || x >= worldConstants::WIDTH ||

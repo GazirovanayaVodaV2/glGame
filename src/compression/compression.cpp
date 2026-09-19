@@ -61,18 +61,15 @@ void compression::compress(std::span<std::uint16_t> data)
 
 }*/
 
-std::vector<std::uint16_t> compression::decompress() { 
-    std::vector<std::uint16_t> data;
-    data.reserve(sizeOfOgVector);
+void compression::decompress(std::vector<std::uint16_t>& out) {
+    out.reserve(sizeOfOgVector);
 
     for (auto compressedValIt = m_data.begin(); compressedValIt < m_data.end(); compressedValIt++)
     {
         auto id = (*compressedValIt).first;
         auto count = (*compressedValIt).second;
         for (std::size_t i{}; i < count; i++) {
-            data.push_back(id); 
+            out.push_back(id);
         }
     }
-
-    return data; 
 }

@@ -21,5 +21,5 @@ class compression {
         void compress(std::span<std::uint16_t> data);
         
         //int operator[](std::size_t i);
-        std::vector<std::uint16_t> decompress();
+        void decompress(std::vector<std::uint16_t>& out);
 };

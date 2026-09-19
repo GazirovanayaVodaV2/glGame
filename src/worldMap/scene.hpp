@@ -121,7 +121,7 @@ private:
 	std::filesystem::path* worldPath = nullptr;
 
 	int ix, iy;
-
+	
 	bool compressed = false;
 
 	void initBuffers() {
@@ -169,6 +169,10 @@ public:
 
 	void compress();
 	void decompress();
+
+	bool isMeshBuilded() {
+		return !m_isBuildingMesh && !meshBuilderDirty;
+	}
 };
 
 enum class worldType {
