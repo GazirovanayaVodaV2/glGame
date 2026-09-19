@@ -31,10 +31,18 @@ void mesh::setup()
 
     glBindVertexArray(0);
 
-    //m_verticies.clear();
-    //m_verticies.shrink_to_fit();
-    //m_indicies.clear();
-    //m_indicies.shrink_to_fit();
+    m_indicesCount = m_indicies.size();
+
+    for (auto& vert : m_verticies) {
+        uvs.emplace_back(vert.uv);
+    }
+
+    m_verticies.clear();
+    m_verticies.shrink_to_fit();
+    m_indicies.clear();
+    m_indicies.shrink_to_fit();
+
+    m_loaded = true;
 }
 
 void mesh::cleanup()

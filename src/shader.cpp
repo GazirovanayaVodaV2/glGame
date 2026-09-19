@@ -64,17 +64,22 @@ shader::shader(std::filesystem::path vertexShader, std::filesystem::path fragmen
 	glDeleteShader(fragment);
 }
 
+shader::~shader()
+{
+	if (ID != 0) glDeleteProgram(ID);
+}
 
-int shader::getUniformLocation(const std::string& name)
+
+int shader::getUniformLocation(std::string_view name)
 {
 	if (m_uniformLocationCache.find(name) != m_uniformLocationCache.end()) {
 		return m_uniformLocationCache[name];
 	}
-	int loc = glGetUniformLocation(ID, name.c_str());
+	int loc = glGetUniformLocation(ID, name.data());
+	m_uniformLocationCache[name] = loc;
 	if (loc == -1) {
 		std::cerr << "Warning, uniform " << name << " not found!" << std::endl;
 		return -1;
 	}
-	m_uniformLocationCache[name] = loc;
 	return loc;
 }

@@ -24,7 +24,11 @@ glm::mat4 Transform::getInterpolated(Transform& lastState, float alpha)
     glm::vec3 interpPos = glm::mix(lastState.pos, pos, alpha);
     glm::vec3 interpScale = glm::mix(lastState.scale, scale, alpha);
 
-    glm::quat interpRot = glm::slerp(glm::quat(lastState.rotation), glm::quat(rotation), alpha);
+    glm::quat interpRot = glm::slerp(
+        glm::quat(glm::radians(lastState.rotation)),
+        glm::quat(glm::radians(rotation)),
+        alpha
+    );
 
     glm::mat4 model = glm::mat4(1.0f);
     model = glm::translate(model, interpPos);

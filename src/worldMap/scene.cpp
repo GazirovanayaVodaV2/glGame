@@ -683,7 +683,8 @@ std::unique_ptr<ChunkRawData> meshBuilder::buildMesh(const blockArray& blocks, c
 	std::size_t id{};
     for (const auto& mesh : threadLocalCache->meshes) {
         if (!mesh.vertices.empty()) {
-            result->meshes[id] = mesh; 
+			result->meshes[id].vertices = std::move(mesh.vertices);
+			result->meshes[id].indices = std::move(mesh.indices);
         }
 		id++;
     }

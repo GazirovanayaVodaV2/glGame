@@ -8,6 +8,8 @@
 #include <glm/vec3.hpp> 
 #include <glm/mat4x4.hpp> 
 
+#include <string_view>
+
 class shader {
 public:
 	enum class types {
@@ -18,24 +20,29 @@ public:
 	shader() = default;
 	shader(std::filesystem::path vertexShader,
 		std::filesystem::path fragmentShader);
+	~shader();
 
-	int getUniformLocation(const std::string& name);
+	shader(const shader&) = delete;
+	shader& operator=(const shader&) = delete;
+	shader(shader&& other) noexcept : ID(other.ID) { other.ID = 0; }
+
+	int getUniformLocation(std::string_view name);
 	template <typename T> 
-	void set(const std::string& name, T value);
+	void set(std::string_view name, T value);
 
 	unsigned int getID() {
 		return ID;
 	}
 private:
 	unsigned int ID = 0;
-	std::unordered_map<std::string, int> m_uniformLocationCache;
+	std::unordered_map<std::string_view, int> m_uniformLocationCache;
 
 	unsigned int compile(std::string code, types type);
 	void checkErrors(uint32_t shader, types type);
 };
 
 template<typename T>
-inline void shader::set(const std::string& name, T value)
+inline void shader::set(std::string_view name, T value)
 {
 	int location = getUniformLocation(name);
 	if (location == -1) return;
