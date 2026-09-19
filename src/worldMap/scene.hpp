@@ -18,10 +18,37 @@
 #include <thread>
 #include <algorithm>
 #include <bitset>
+#include <tuple>
 
 #include "../compression/compression.hpp"
+#include "../utils/minTypes/minTypes.hpp"
+
+#include "Block.hpp"
+
+namespace worldConstants {
+	static constexpr auto WIDTH = minUint<16>();
+	static constexpr auto LENGTH = minUint<16>();
+	static constexpr auto HEIGHT = minUint<255>();
+	static constexpr auto SURFACE = minUint<WIDTH * HEIGHT>();
+	static constexpr auto CHUNK_VOLUME = minUint<WIDTH * LENGTH * HEIGHT>();
+
+	constexpr float gravity = 0.08f;
+}
 
 using chunkPosT = std::pair<int, int>;
+using inChunkX_t = minUint_t<worldConstants::WIDTH>;
+using inChunkY_t = minUint_t<worldConstants::HEIGHT>;
+using inChunkZ_t = minUint_t<worldConstants::LENGTH>; 
+using inChunkPos_t = std::tuple<inChunkX_t, inChunkY_t, inChunkZ_t>;
+
+struct inChunkPosHash {
+	std::size_t operator()(const inChunkPos_t & pos) const noexcept {
+		auto x = static_cast<uint64_t>(std::get<0>(pos));
+		auto y = static_cast<uint64_t>(std::get<1>(pos));
+		auto z = static_cast<uint64_t>(std::get<2>(pos));
+		return static_cast<std::size_t>((x << 32) | (y << 16) | z);
+	}
+};
 
 struct ChunkPosHash {
 	std::size_t operator()(const chunkPosT& pos) const noexcept {
@@ -31,39 +58,31 @@ struct ChunkPosHash {
 };
 
 namespace worldConstants {
-	static constexpr int WIDTH = 16;
-	static constexpr int LENGTH = 16;
-	static constexpr int HEIGHT = 256;
-	static constexpr int CHUNK_VOLUME = WIDTH * LENGTH * HEIGHT;
-
-	constexpr float gravity = 0.08f;
-
-	inline chunkPosT worldCoordToChunkCoord(float x, float z)
+	[[nodiscard]] inline chunkPosT worldCoordToChunkCoord(float x, float z) noexcept
 	{
-		auto _x = static_cast<int>(std::floor(x));
-		auto _z = static_cast<int>(std::floor(z));
+		constexpr auto SHIFT_X = std::countr_zero(WIDTH);
+		constexpr auto SHIFT_Z = std::countr_zero(LENGTH);
 
-		auto ix = _x >> std::countr_zero(static_cast<unsigned int>(worldConstants::WIDTH));
-		auto iz = _z >> std::countr_zero(static_cast<unsigned int>(worldConstants::LENGTH));
+		const auto ix = static_cast<int>(std::floor(x));
+		const auto iz = static_cast<int>(std::floor(z));
 
-		return { ix, iz };
+		return { ix >> SHIFT_X, iz >> SHIFT_Z };
 	}
 
 	static_assert(std::has_single_bit(static_cast<unsigned int>(WIDTH)), "WIDTH must be a power of 2!");
 	static_assert(std::has_single_bit(static_cast<unsigned int>(LENGTH)), "LENGTH must be a power of 2!");
-	static_assert(std::has_single_bit(static_cast<unsigned int>(HEIGHT)), "HEIGHT must be a power of 2!");
 };
 
 struct blockArray {
-	std::vector<uint16_t> m_array = std::vector<uint16_t>(worldConstants::CHUNK_VOLUME);
-	void setBlock(int x, int y, int z, int id);
+	std::vector<BlockId_t> m_array = std::vector<BlockId_t>(worldConstants::CHUNK_VOLUME);
+	void setBlock(inChunkX_t x, inChunkY_t y, inChunkZ_t z, BlockId_t id);
 };
 struct blockMetaArray {
-	std::vector<uint16_t> m_array = std::vector<uint16_t>(worldConstants::CHUNK_VOLUME);
-	void setMeta(int x, int y, int z, int meta);
+	std::vector<BlockMeta_t> m_array = std::vector<BlockMeta_t>(worldConstants::CHUNK_VOLUME);
+	void setMeta(inChunkX_t x, inChunkY_t y, inChunkZ_t z, BlockMeta_t meta);
 };
 
-using heightMapArray = std::array<int, worldConstants::WIDTH * worldConstants::LENGTH>;
+using heightMapArray = std::array<std::uint8_t, worldConstants::WIDTH * worldConstants::LENGTH>;
 
 struct RawMeshData {
 	std::vector<vertex> vertices;
@@ -71,11 +90,11 @@ struct RawMeshData {
 };
 
 struct ChunkRawData {
-	std::array<RawMeshData, 256> meshes;
+	std::array<RawMeshData, worldConstants::SURFACE> meshes;
 };
 
 struct ChunkMeshData {
-	std::array<RawMeshData, 256> meshes;
+	std::array<RawMeshData, worldConstants::SURFACE> meshes;
 };  
 
 class meshBuilder {
@@ -99,7 +118,8 @@ struct SubChunkModel {
 };
 
 struct chunkChanges {
-	int x, y, z, id, meta;
+	BlockId_t id;
+	BlockMeta_t meta;
 };
 
 class chunk {
@@ -112,7 +132,7 @@ private:
 	std::shared_ptr<chunkBuffers> m_buffers;
 	compression m_compressedChunk;
 	compression m_compressedChunkMeta;
-	std::vector<chunkChanges> m_changes;
+	std::unordered_map<inChunkPos_t, chunkChanges, inChunkPosHash> m_changes;
 	std::vector<SubChunkModel> m_terrainModels;
 
 	std::future<std::unique_ptr<ChunkRawData>> m_meshFuture;
@@ -143,14 +163,14 @@ public:
 	void update();
 	void draw(float alpha);
 
-	void setBlock(int x, int y, int z, int id, int meta = 0);
+	void setBlock(inChunkX_t x, inChunkY_t y, inChunkZ_t z, BlockId_t id, BlockMeta_t meta = 0);
 
-	static int getIndex(int x, int y, int z) {
+	static int getIndex(inChunkX_t x, inChunkY_t y, inChunkZ_t z) {
 		return x + (z * worldConstants::WIDTH) + (y * worldConstants::WIDTH * worldConstants::LENGTH);
 	}
 
-	int getBlock(int lx, int ly, int lz);
-	int getBlockMeta(int lx, int ly, int lz);
+	BlockId_t getBlock(inChunkX_t lx, inChunkY_t ly, inChunkZ_t lz);
+	BlockMeta_t getBlockMeta(inChunkX_t lx, inChunkY_t ly, inChunkZ_t lz);
 
 	chunkPosT getChunkPos() {
 		return { ix, iy };
@@ -221,8 +241,8 @@ public:
 	void draw(float alpha);
 	void setBlock(int x, int y, int z, int id, int meta = 0);
 
-	int getBlock(int x, int y, int z);
-	int getBlockMeta(int x, int y, int z);
+	BlockId_t getBlock(int x, int y, int z);
+	BlockMeta_t getBlockMeta(int x, int y, int z);
 
 	chunk* getChunk(int chunkX, int chunkZ)
 	{

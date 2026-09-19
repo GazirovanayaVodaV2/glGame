@@ -7,15 +7,6 @@
 
 #include "camera.hpp"
 
-GLFWwindow* glfwContext::m_window = nullptr;
-
-std::vector<voidFunction> glfwContext::m_inCycleEvents, glfwContext::m_inCycleEvents_Undeletable;
-std::vector<Idrawable*> glfwContext::m_drawableObjects;
-unsigned int glfwContext::currentShaderID = 0;
-glm::mat4 glfwContext::projection = glm::perspective(glm::radians(80.0f), 16.0f / 9.0f, 0.1f, 100.0f);
-
-int glfwContext::openGLVersion = OPENGLVERSION;
-
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
     gameSettings::resolution = { width, height };
@@ -92,12 +83,16 @@ void glfwContext::init()
     //
 
     glfwContext::projection = glm::perspective(glm::radians(gameSettings::fov), gameSettings::ratio, 0.1f, 1000.0f);
-   
+
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
 
-    addCycleEvent(Camera::keyCallback, false);
+    addKeyboardInputEvent(Camera::keyCallback);
+    addKeyboardInputEvent([](GLFWwindow* window) {
+        if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+            glfwSetWindowShouldClose(window, true);
+        });
 }
 
 void glfwContext::updateConfiguration()
@@ -119,8 +114,7 @@ void glfwContext::mainGameCycle()
         accumulator += logicTimer.getDeltaTicks();
         glfwPollEvents();
 
-        if (glfwGetKey(m_window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-            glfwSetWindowShouldClose(m_window, true);
+
 
         while (accumulator >= 1.0f) {
             Camera::SaveStateForInterpolation();
@@ -130,6 +124,12 @@ void glfwContext::mainGameCycle()
             accumulator -= 1.0f;
             for (auto& event : m_inCycleEvents_Undeletable) {
                 event();
+            }
+            for (auto& event : m_keyboardEvents) {
+                event(m_window);
+            }
+            for (auto& event : m_mouseEvents) {
+                event(m_window);
             }
         }
 
@@ -191,4 +191,14 @@ void glfwContext::addCycleEvent(voidFunction event, bool canDelete)
 void glfwContext::addDrawTarget(Idrawable* object)
 {
     m_drawableObjects.push_back(object);
+}
+
+void glfwContext::addKeyboardInputEvent(inputEvent event)
+{
+    m_keyboardEvents.push_back(event);
+}
+
+void glfwContext::addMouseInputEvent(inputEvent event)
+{
+    m_mouseEvents.push_back(event);
 }

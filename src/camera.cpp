@@ -88,9 +88,8 @@ void Camera::mouseCallback(GLFWwindow* window, double xposIn, double yposIn)
 	Camera::Rotate(xoffset, yoffset);
 }
 
-void Camera::keyCallback()
+void Camera::keyCallback(GLFWwindow* window)
 {
-	auto window = glfwContext::getWindow();
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
 		MoveByKeyBoard(MoveDirection::Forward);
 	}

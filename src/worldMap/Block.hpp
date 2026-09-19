@@ -19,6 +19,9 @@ struct BlockStats {
     float durability, explosionResistance;
 };
 
+using BlockId_t = std::uint16_t;
+using BlockMeta_t = std::uint16_t;
+
 class Block : public ISceneObject {
 private:
 	glm::vec3 m_position, m_lastpos;

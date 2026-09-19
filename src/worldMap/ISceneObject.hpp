@@ -15,6 +15,8 @@ public:
     virtual mesh& getMesh() = 0;
     virtual Transform& getTransform() = 0;
     virtual collisionMesh& getCollisionMesh() = 0;
+    void setOnGround(bool val) {};
+    
     glm::vec3 checkCollision(const collisionMesh& otherCollisionMesh, const Transform& transform);
     void drawDebugAABB();
     

@@ -30,7 +30,7 @@ public:
 	static void MoveByKeyBoard(MoveDirection dir);
 
 	static void mouseCallback(GLFWwindow* window, double xposIn, double yposIn);
-	static void keyCallback();
+	static void keyCallback(GLFWwindow* window);
 
 	static void updateInterpolatedMatrix(float alpha);
 	static void SaveStateForInterpolation() { pastPos = pos; };

@@ -23,13 +23,14 @@ enum class gameMode {
 class Player : public ISceneObject {
 private:
     Transform m_transform, m_lastState;
-    glm::vec3 m_velocity{};
+    glm::vec3 m_velocity{},
+              m_wantedVelocity{};
     gameMode m_mode{ gameMode::SURVIVAL };
     std::unique_ptr<basicModel> m_model;
     collisionMesh m_collisionMesh;
 
-    const float m_speed = 0.5f;
-    const float m_jumpForce = 8.4;
+    const float m_speed = 0.4f;
+    const float m_jumpForce = 0.5f;
     const float m_eyeHeight = 1.62f;
 
     glm::vec3 m_bbMin{ -0.3f, 0.0f, -0.3f };
@@ -72,9 +73,8 @@ public:
         return m_collisionMesh;
     };
 
-    void moveByKeyBoard(MoveDirection dir);
-    void keyCallback();
-    void mouseCallBack();
+    void keyCallback(GLFWwindow* window);
+    void mouseCallBack(GLFWwindow* window);
 
     void SaveStateForInterpolation() override {
         m_lastState = m_transform;
@@ -82,5 +82,7 @@ public:
             m_model->SaveStateForInterpolation();
         }
     }
-
+    void setOnGround(bool val) {
+        m_onGround = val;
+    }
 };  

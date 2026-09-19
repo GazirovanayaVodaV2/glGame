@@ -13,7 +13,7 @@
 #include "../glfwContext.hpp"
 #include "../camera.hpp"
 #include "../collisionSystem.hpp"
-#include "../threadPool/threadPool.hpp"
+#include "../utils/threadPool/threadPool.hpp"
 
 #define getField(JSON, NAME, TYPE) JSON.at(NAME).get<TYPE>()
 chunk::chunk(int xid, int yid, std::shared_ptr<chunkBuffers> buffers, std::filesystem::path* path)
@@ -138,7 +138,7 @@ void chunk::draw(float alpha) {
 	//glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
-void chunk::setBlock(int x, int y, int z, int id, int meta)
+void chunk::setBlock(inChunkX_t x, inChunkY_t y, inChunkZ_t z, BlockId_t id, BlockMeta_t meta)
 {
 	if (compressed) {
 		decompress();
@@ -163,14 +163,14 @@ void chunk::setBlock(int x, int y, int z, int id, int meta)
 		}
 
 		if (loaded) {
-			m_changes.push_back({ x,y,z,id,meta });
+			m_changes[inChunkPos_t{x,y,z}] = { id, meta };
 		}
 
 		meshBuilderDirty = true;
 	}
 }
 
-int chunk::getBlock(int lx, int ly, int lz)
+BlockId_t chunk::getBlock(inChunkX_t lx, inChunkY_t ly, inChunkZ_t lz)
 {
 	if (compressed) {
 		decompress();
@@ -180,7 +180,7 @@ int chunk::getBlock(int lx, int ly, int lz)
 	return (m_buffers->blocks->m_array)[index];
 }
 
-int chunk::getBlockMeta(int lx, int ly, int lz)
+BlockMeta_t chunk::getBlockMeta(inChunkX_t lx, inChunkY_t ly, inChunkZ_t lz)
 {
 	if (compressed) {
 		decompress();
@@ -209,17 +209,15 @@ void chunk::loadFromFile()
 
 		m_changes.clear();
 		for (auto& rawChange : blockChanges) {
-			chunkChanges change{
-				rawChange[0],
-				rawChange[1],
-				rawChange[2],
-				rawChange[3],
-				rawChange[4]
-			};
+			auto x = rawChange[0];
+			auto y = rawChange[1];
+			auto z = rawChange[2];
+			auto id = static_cast<BlockId_t>(rawChange[3]);
+			auto meta = static_cast<BlockMeta_t>(rawChange[4]);
 
-			m_changes.push_back(change);
+			m_changes[inChunkPos_t{ x,y,z }] = { id, meta };
 
-			setBlock(change.x, change.y, change.z, change.id, change.meta);
+			setBlock(x, y, z, id, meta);
 		}
 	}
 }
@@ -236,15 +234,14 @@ void chunk::safeToFile()
 			return;
 		}
 		std::vector<std::vector<int>> blockChanges;
-		blockChanges.reserve(m_changes.size());
 
 		for (const auto& change : m_changes) {
 			blockChanges.push_back({
-				change.x,
-				change.y,
-				change.z,
-				change.id,
-				change.meta
+				std::get<0>(change.first),
+				std::get<1>(change.first),
+				std::get<2>(change.first),
+				change.second.id,
+				change.second.meta
 				});
 		}
 
@@ -329,7 +326,7 @@ void dimensionBase::setBlock(int x, int y, int z, int id, int meta)
 	targetChunk->setBlock(localX, y, localZ, id, meta);
 }
 
-int dimensionBase::getBlock(int x, int y, int z)
+BlockId_t dimensionBase::getBlock(int x, int y, int z)
 {
 	if (y < 0 || y >= worldConstants::HEIGHT) return 0;
 
@@ -341,7 +338,7 @@ int dimensionBase::getBlock(int x, int y, int z)
 	return targetChunk->getBlock(x & (worldConstants::WIDTH - 1), y, z & (worldConstants::LENGTH - 1));
 }
 
-int dimensionBase::getBlockMeta(int x, int y, int z)
+BlockMeta_t dimensionBase::getBlockMeta(int x, int y, int z)
 {
 	if (y < 0 || y >= worldConstants::HEIGHT) return 0;
 
@@ -445,57 +442,85 @@ void world::draw(float alpha)
 
 void world::update()
 {
-	if (currentDimension) {
-		currentDimension->update();
+    if (!currentDimension) return;
+    currentDimension->update();
 
-		for (auto& obj : m_globalObjects) {
-			obj->SaveStateForInterpolation();
-			obj->update();
+    static collisionMesh nearbyBlocksBoxes;
+    
+    for (auto& obj : m_globalObjects) {
+        obj->SaveStateForInterpolation();
+        obj->update(); 
 
-			if (obj->getPos().y < -100.0f) {
-				obj->MoveTo({0, worldConstants::HEIGHT, 0});
-			}
+        if (obj->getPos().y < -100.0f) {
+            obj->MoveTo({0, worldConstants::HEIGHT, 0});
+            continue;
+        }
+        obj->setOnGround(false);
 
-			auto objPos = obj->getPos();
-			auto& objCollMehs = obj->getCollisionMesh();
-			const auto& objGlobalBox = objCollMehs.globalBounds;
+        constexpr float maxStepLength = 0.25f; 
+        glm::vec3 vel = obj->getVelocity();
+        float speed = glm::length(vel);
+        int steps = std::max(1, static_cast<int>(std::ceil(speed / maxStepLength)));
 
-			int minX = static_cast<int>(std::floor(objPos.x + objGlobalBox.min.x));
-			int maxX = static_cast<int>(std::ceil(objPos.x + objGlobalBox.max.x));
+        glm::vec3 stepVel = vel / static_cast<float>(steps);
 
-			int minY = static_cast<int>(std::floor(objPos.y + objGlobalBox.min.y));
-			int maxY = static_cast<int>(std::ceil(objPos.y + objGlobalBox.max.y));
+        auto collectNearbyBlocks = [&](const glm::vec3& currentPos) {
+            nearbyBlocksBoxes->clear();
+            const auto& objGlobalBox = obj->getCollisionMesh().globalBounds;
 
-			int minZ = static_cast<int>(std::floor(objPos.z + objGlobalBox.min.z));
-			int maxZ = static_cast<int>(std::ceil(objPos.z + objGlobalBox.max.z));
+            int minX = static_cast<int>(std::floor(currentPos.x + objGlobalBox.min.x));
+            int maxX = static_cast<int>(std::ceil(currentPos.x + objGlobalBox.max.x));
 
-			collisionMesh nearbyBlocksBoxes;
+            int minY = static_cast<int>(std::floor(currentPos.y + objGlobalBox.min.y));
+            int maxY = static_cast<int>(std::ceil(currentPos.y + objGlobalBox.max.y));
 
-			for (int x = minX; x <= maxX; ++x) {
-				for (int y = minY; y <= maxY; ++y) {
-					for (int z = minZ; z <= maxZ; ++z) {
-						int id = currentDimension->getBlock(x, y, z);
-						if (id == 0) continue;
+            int minZ = static_cast<int>(std::floor(currentPos.z + objGlobalBox.min.z));
+            int maxZ = static_cast<int>(std::ceil(currentPos.z + objGlobalBox.max.z));
 
-						const auto& block = BlockTable::getBlock(id);
-						if (!block) continue;
+            for (int x = minX; x <= maxX; ++x) {
+                for (int y = minY; y <= maxY; ++y) {
+                    for (int z = minZ; z <= maxZ; ++z) {
+                        int id = currentDimension->getBlock(x, y, z);
+                        if (id == 0) continue;
 
-						auto localBoxes = block->getCollisionMesh();
+                        const auto& block = BlockTable::getBlock(id);
+                        if (!block) continue;
 
-						glm::vec3 blockWorldPos(x,y,z);
-						for (const auto& localBox : localBoxes) {
-							nearbyBlocksBoxes->push_back(localBox.offset(blockWorldPos));
-						}
-					}
-				}
-			}
+                        auto localBoxes = block->getCollisionMesh();
+                        glm::vec3 blockWorldPos(x, y, z);
+                        for (const auto& localBox : localBoxes) {
+                            nearbyBlocksBoxes->push_back(localBox.offset(blockWorldPos));
+                        }
+                    }
+                }
+            }
+            nearbyBlocksBoxes.calculateGlobalBoxes();
+        };
 
-			if (!nearbyBlocksBoxes->empty()) {
-				nearbyBlocksBoxes.calculateGlobalBoxes();
-				obj->checkCollision(nearbyBlocksBoxes, Transform{});
-			}
-		}
-	}
+        for (int s = 0; s < steps; ++s) {
+            if (std::abs(stepVel.y) > 0.00001f) {
+                obj->MoveOn({0.0f, stepVel.y, 0.0f});
+                collectNearbyBlocks(obj->getPos());
+                if (!nearbyBlocksBoxes->empty()) {
+                    obj->checkCollision(nearbyBlocksBoxes, Transform{});
+                }
+            }
+            if (std::abs(stepVel.x) > 0.00001f) {
+                obj->MoveOn({stepVel.x, 0.0f, 0.0f});
+                collectNearbyBlocks(obj->getPos());
+                if (!nearbyBlocksBoxes->empty()) {
+                    obj->checkCollision(nearbyBlocksBoxes, Transform{});
+                }
+            }
+            if (std::abs(stepVel.z) > 0.00001f) {
+                obj->MoveOn({0.0f, 0.0f, stepVel.z});
+                collectNearbyBlocks(obj->getPos());
+                if (!nearbyBlocksBoxes->empty()) {
+                    obj->checkCollision(nearbyBlocksBoxes, Transform{});
+                }
+            }
+        }
+    }
 }
 
 std::shared_ptr<chunkBuffers> overworld::generateChunk(int xid, int yid)
@@ -598,7 +623,6 @@ std::unique_ptr<ChunkRawData> meshBuilder::buildMesh(const blockArray& blocks, c
 
 		}
 		else if (count >= 36) {
-			// ��� ������ � 36 ��������� (�����/������) ����� Bounding Box �������� ��������
 			size_t offset = faceIndex * 6;
 			glm::vec2 uv_min = blockUVs[offset];
 			glm::vec2 uv_max = blockUVs[offset];
@@ -627,7 +651,7 @@ std::unique_ptr<ChunkRawData> meshBuilder::buildMesh(const blockArray& blocks, c
 
 	for (int x = 0; x < worldConstants::WIDTH; ++x) {
 		for (int z = 0; z < worldConstants::LENGTH; ++z) {
-			int maxHeight = std::clamp(heightMap[x + z * worldConstants::WIDTH], 0, worldConstants::HEIGHT - 1);
+			int maxHeight = std::clamp<int>(heightMap[x + z * worldConstants::WIDTH], 0, worldConstants::HEIGHT - 1);
 			for (int y = 0; y <= maxHeight; ++y) {
 
 				int blockId = block_array[chunk::getIndex(x, y, z)];
@@ -691,7 +715,7 @@ std::unique_ptr<ChunkRawData> meshBuilder::buildMesh(const blockArray& blocks, c
 	return result;
 }
 
-void blockArray::setBlock(int x, int y, int z, int id)
+void blockArray::setBlock(inChunkX_t x, inChunkY_t y, inChunkZ_t z, BlockId_t id)
 {
 	if (y >= 0 && y < worldConstants::HEIGHT) {
 		m_array[chunk::getIndex(x, y, z)] = id;
@@ -699,7 +723,7 @@ void blockArray::setBlock(int x, int y, int z, int id)
 	
 }
 
-void blockMetaArray::setMeta(int x, int y, int z, int meta)
+void blockMetaArray::setMeta(inChunkX_t x, inChunkY_t y, inChunkZ_t z, BlockMeta_t meta)
 {
 	if (y >= 0 && y < worldConstants::HEIGHT) {
 		m_array[chunk::getIndex(x, y, z)] = meta;
