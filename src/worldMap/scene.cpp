@@ -13,6 +13,7 @@
 #include "../glfwContext.hpp"
 #include "../camera.hpp"
 #include "../collisionSystem.hpp"
+#include "../threadPool/threadPool.hpp"
 
 #define getField(JSON, NAME, TYPE) JSON.at(NAME).get<TYPE>()
 chunk::chunk(int xid, int yid, std::shared_ptr<chunkBuffers> buffers, std::filesystem::path* path)
@@ -23,7 +24,26 @@ chunk::chunk(int xid, int yid, std::shared_ptr<chunkBuffers> buffers, std::files
 	this->iy = yid;
 	m_buffers = buffers;
 	loadFromFile();	
+
 	loaded = true;
+}
+
+void chunk::compress()
+{
+	compressed = true;
+
+	m_compressedChunk.compress(m_buffers->blocks->m_array);
+	m_compressedChunkMeta.compress(m_buffers->blockMeta->m_array);
+
+	m_buffers->blocks->m_array.clear();
+	m_buffers->blockMeta->m_array.clear();
+}
+
+void chunk::decompress()
+{
+	m_buffers->blocks->m_array = std::move(m_compressedChunk.decompress());	
+	m_buffers->blockMeta->m_array = std::move(m_compressedChunkMeta.decompress());
+	compressed = false;		
 }
 
 void chunk::update()
@@ -34,7 +54,7 @@ void chunk::update()
 			entity->update();
 		}
 
-		if (meshBuilderDirty && !m_isBuildingMesh) {
+		/*if (meshBuilderDirty && !m_isBuildingMesh) {
 			m_isBuildingMesh = true;
 			meshBuilderDirty = false;
 
@@ -44,8 +64,17 @@ void chunk::update()
 				meshBuilder builder;
 				return builder.buildMesh(blocks, meta, height);
 				});
+		}*/
+		if (meshBuilderDirty && !m_isBuildingMesh && !compressed) {
+			m_isBuildingMesh = true;
+			meshBuilderDirty = false;
+			m_meshFuture = threadPool::instance().enqueue([blocks = *m_buffers->blocks,
+												meta = *m_buffers->blockMeta,
+												height = *m_buffers->heightMap]() {
+				meshBuilder builder;
+				return builder.buildMesh(blocks, meta, height);
+			});
 		}
-
 		if (m_isBuildingMesh && m_meshFuture.valid()) {
 			if (m_meshFuture.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
 				auto rawData = m_meshFuture.get();
@@ -105,6 +134,9 @@ void chunk::draw(float alpha) {
 
 void chunk::setBlock(int x, int y, int z, int id, int meta)
 {
+	if (compressed) {
+		decompress();
+	}
 	if (m_buffers->blocks) {
 		m_buffers->blocks->setBlock(x, y, z, id);
 		m_buffers->blockMeta->setMeta(x, y, z, meta);
@@ -134,6 +166,9 @@ void chunk::setBlock(int x, int y, int z, int id, int meta)
 
 int chunk::getBlock(int lx, int ly, int lz)
 {
+	if (compressed) {
+		decompress();
+	}
 	if (!m_buffers->blocks) return 0;
 	size_t index = getIndex(lx, ly, lz);
 	return (m_buffers->blocks->m_array)[index];
@@ -141,6 +176,9 @@ int chunk::getBlock(int lx, int ly, int lz)
 
 int chunk::getBlockMeta(int lx, int ly, int lz)
 {
+	if (compressed) {
+		decompress();
+	}
 	if (!m_buffers->blockMeta) return 0;
 	size_t index = getIndex(lx, ly, lz);
 	return (m_buffers->blockMeta->m_array)[index];
@@ -220,6 +258,8 @@ void dimensionBase::loadChunksFromPos(glm::vec3 pos, int renderDistance, int see
 	int minZ = centerChunkZ - halfRenderDistance;
 	int maxZ = centerChunkZ + halfRenderDistance;
 
+	
+
 	std::erase_if(m_loadedChunks, [minX, maxX, minZ, maxZ](const auto& pair) {
 		const auto& [pos, c] = pair;
 		auto [chunkX, chunkZ] = pos;
@@ -233,6 +273,23 @@ void dimensionBase::loadChunksFromPos(glm::vec3 pos, int renderDistance, int see
 	for (int x = minX; x <= maxX; ++x) {
 		for (int z = minZ; z <= maxZ; ++z) {
 			generateChunkPrep(x, z, seed);
+		}
+	}
+
+	int radius = 4;
+	int minX_r4 = centerChunkX - radius;
+	int maxX_r4 = centerChunkX + radius;
+	int minZ_r4 = centerChunkZ - radius;
+	int maxZ_r4 = centerChunkZ + radius;
+
+	for (auto& [chunkPos, chunkPtr] : m_loadedChunks) {
+		auto [cx, cz] = chunkPos;
+
+
+		if (cx >= minX_r4 && cx <= maxX_r4 && cz >= minZ_r4 && cz <= maxZ_r4) {
+			chunkPtr->decompress();
+		} else {
+			chunkPtr->compress();
 		}
 	}
 }
@@ -473,7 +530,12 @@ std::shared_ptr<chunkBuffers> overworld::generateChunk(int xid, int yid)
 
 std::unique_ptr<ChunkRawData> meshBuilder::buildMesh(const blockArray& blocks, const blockMetaArray& blockMeta, const heightMapArray& heightMap)
 {
-	auto result = std::make_unique<ChunkRawData>();
+	thread_local auto threadLocalCache = std::make_unique<ChunkRawData>(); 
+    for (auto& mesh : threadLocalCache->meshes) {
+        mesh.vertices.clear();
+        mesh.indices.clear();
+    }
+
 	auto& block_array = blocks.m_array;
 
 	auto isSolid = [&block_array](int x, int y, int z) -> bool {
@@ -534,7 +596,7 @@ std::unique_ptr<ChunkRawData> meshBuilder::buildMesh(const blockArray& blocks, c
 
 		}
 		else if (count >= 36) {
-			// Для блоков с 36 вершинами (земля/камень) метод Bounding Box работает идеально
+			// пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ 36 пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅпїЅпїЅ/пїЅпїЅпїЅпїЅпїЅпїЅ) пїЅпїЅпїЅпїЅпїЅ Bounding Box пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 			size_t offset = faceIndex * 6;
 			glm::vec2 uv_min = blockUVs[offset];
 			glm::vec2 uv_max = blockUVs[offset];
@@ -569,7 +631,7 @@ std::unique_ptr<ChunkRawData> meshBuilder::buildMesh(const blockArray& blocks, c
 				int blockId = block_array[chunk::getIndex(x, y, z)];
 				if (blockId == 0) continue;
 
-				auto& rawMesh = result->meshes[blockId];
+				auto& rawMesh = threadLocalCache->meshes[blockId];
 				auto& verts = rawMesh.vertices;
 				auto& inds = rawMesh.indices;
 
@@ -614,6 +676,15 @@ std::unique_ptr<ChunkRawData> meshBuilder::buildMesh(const blockArray& blocks, c
 			}
 		}
 	}
+
+	auto result = std::make_unique<ChunkRawData>();
+	std::size_t id{};
+    for (const auto& mesh : threadLocalCache->meshes) {
+        if (!mesh.vertices.empty()) {
+            result->meshes[id] = mesh; 
+        }
+		id++;
+    }
 	return result;
 }
 

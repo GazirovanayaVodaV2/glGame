@@ -17,6 +17,9 @@
 #include <semaphore>
 #include <thread>
 #include <algorithm>
+#include <bitset>
+
+#include "../compression/compression.hpp"
 
 using chunkPosT = std::pair<int, int>;
 
@@ -49,14 +52,14 @@ namespace worldConstants {
 	static_assert(std::has_single_bit(static_cast<unsigned int>(WIDTH)), "WIDTH must be a power of 2!");
 	static_assert(std::has_single_bit(static_cast<unsigned int>(LENGTH)), "LENGTH must be a power of 2!");
 	static_assert(std::has_single_bit(static_cast<unsigned int>(HEIGHT)), "HEIGHT must be a power of 2!");
-}
+};
 
 struct blockArray {
-	std::array<uint16_t, worldConstants::CHUNK_VOLUME> m_array;
+	std::vector<uint16_t> m_array = std::vector<uint16_t>(worldConstants::CHUNK_VOLUME);
 	void setBlock(int x, int y, int z, int id);
 };
 struct blockMetaArray {
-	std::array<uint8_t, worldConstants::CHUNK_VOLUME> m_array;
+	std::vector<uint16_t> m_array = std::vector<uint16_t>(worldConstants::CHUNK_VOLUME);
 	void setMeta(int x, int y, int z, int meta);
 };
 
@@ -107,6 +110,8 @@ private:
 	std::vector<std::unique_ptr<ISceneObject>> entities;
 
 	std::shared_ptr<chunkBuffers> m_buffers;
+	compression m_compressedChunk;
+	compression m_compressedChunkMeta;
 	std::vector<chunkChanges> m_changes;
 	std::vector<SubChunkModel> m_terrainModels;
 
@@ -116,6 +121,8 @@ private:
 	std::filesystem::path* worldPath = nullptr;
 
 	int ix, iy;
+
+	bool compressed = false;
 
 	void initBuffers() {
 		if (!arraysLoaded) {
@@ -159,6 +166,9 @@ public:
 	bool isLoaded() {
 		return loaded;
 	}
+
+	void compress();
+	void decompress();
 };
 
 enum class worldType {
