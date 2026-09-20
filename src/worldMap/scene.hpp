@@ -228,6 +228,8 @@ protected:
 	glm::vec2 pastRenderPos{};
 	std::filesystem::path* worldPath = nullptr;
 
+	std::uint16_t time{12000};
+
 	void generateChunkPrep(int xid, int yid, int seed);
 	virtual std::shared_ptr<chunkBuffers> generateChunk(int xid, int yid) {return std::make_shared<chunkBuffers>();};
 	

@@ -4,5 +4,5 @@
     "vsync": true,
     "fps": 900,
     "fullScreen": false,
-    "resizeable": false
+    "resizeable": true
 }

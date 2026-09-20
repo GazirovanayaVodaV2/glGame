@@ -6,6 +6,8 @@
 #include "glfwContext.hpp"
 #include "timer.hpp"
 
+#include "global.hpp"
+
 glm::vec3 Camera::pos = glm::vec3(0.0f, 0.0f, 3.0f);
 glm::vec3 Camera::front = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 Camera::up = glm::vec3(0.0f, 1.0f, 0.0f);

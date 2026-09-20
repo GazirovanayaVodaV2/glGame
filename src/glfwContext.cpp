@@ -7,6 +7,8 @@
 
 #include "camera.hpp"
 
+#include "global.hpp"
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
     gameSettings::resolution = { width, height };
@@ -84,6 +86,7 @@ void glfwContext::init()
 
     glfwContext::projection = glm::perspective(glm::radians(gameSettings::fov), gameSettings::ratio, 0.1f, 1000.0f);
 
+
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
@@ -93,6 +96,8 @@ void glfwContext::init()
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
             glfwSetWindowShouldClose(window, true);
         });
+
+    UniformBuffer<globalUniforms_t>::init();
 }
 
 void glfwContext::updateConfiguration()
@@ -140,6 +145,12 @@ void glfwContext::mainGameCycle()
 
         if (gameSettings::vsync || (renderTimer.getDeltaMS(false) >= targetFpsTime)) {
             renderTimer.reset();
+
+            globalUniforms.view = Camera::getView();
+            globalUniforms.cameraPos = glm::vec4(Camera::getPos(),1.0f);
+            globalUniforms.projection = glfwContext::projection;
+            UniformBuffer<globalUniforms_t>::update(globalUniforms);
+
             glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

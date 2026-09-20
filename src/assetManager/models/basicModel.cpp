@@ -10,8 +10,7 @@ void basicModel::draw(float alpha)
     m_mesh.bind();
 
     m_shader.set<glm::mat4>("model", model);
-    m_shader.set<glm::mat4>("view", Camera::getView());
-    m_shader.set<glm::mat4>("projection", glfwContext::projection);
     glDrawElements(GL_TRIANGLES, m_mesh.getIndiciesSize(), GL_UNSIGNED_INT, 0);
     m_mesh.unbind();
 }
+ 

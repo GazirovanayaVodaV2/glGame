@@ -70,7 +70,7 @@ public:
             m_loaded = std::exchange(other.m_loaded, 0);
 
             other.VAO = 0;
-            other.VBO = 0;
+            other.VBO = 0; 
             other.EBO = 0;
         }
         return *this;

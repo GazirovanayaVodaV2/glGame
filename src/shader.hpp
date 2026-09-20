@@ -1,4 +1,5 @@
 #pragma once
+#include <iostream>
 #include <fstream>
 #include <glad/glad.h>
 #include <filesystem>
@@ -33,9 +34,13 @@ public:
 	unsigned int getID() {
 		return ID;
 	}
+
+
+
 private:
 	unsigned int ID = 0;
-	std::unordered_map<std::string_view, int> m_uniformLocationCache;
+
+	std::unordered_map<std::string, int> m_uniformLocationCache;
 
 	unsigned int compile(std::string code, types type);
 	void checkErrors(uint32_t shader, types type);
@@ -66,3 +71,44 @@ inline void shader::set(std::string_view name, T value)
 		static_assert(!sizeof(T), "Not supported uniform type!");
 	}
 }
+
+template <typename T>
+class UniformBuffer {
+public:
+	UniformBuffer() = delete;
+	~UniformBuffer() = delete;
+	UniformBuffer(const UniformBuffer&) = delete;
+	UniformBuffer& operator=(const UniformBuffer&) = delete;
+
+	static void init(GLuint bindingPoint = 0)
+	{
+		m_bindingPoint = bindingPoint;
+		glGenBuffers(1, &ubo);
+		if (ubo == GL_INVALID_VALUE) {
+			std::cerr << "Warning, failed to create ubo" << std::endl;
+		}
+
+		glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+		glBufferData(GL_UNIFORM_BUFFER, sizeof(T), nullptr, GL_DYNAMIC_DRAW);
+		glBindBufferBase(GL_UNIFORM_BUFFER, m_bindingPoint, ubo);
+		glBindBuffer(GL_UNIFORM_BUFFER, 0);
+	}
+
+	static void update(const T& globalData) {
+		glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+		glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(T), &globalData);
+		glBindBuffer(GL_UNIFORM_BUFFER, 0);
+	}
+
+	static void free() {
+		if (ubo != 0) {
+			glDeleteBuffers(1, &ubo);
+			ubo = 0;
+		}
+	}
+
+	static unsigned int getID() { return ubo; }
+private:
+	static inline GLuint ubo{};
+	static inline GLuint m_bindingPoint{};
+};

@@ -8,8 +8,8 @@
 #include "collisionSystem.hpp"
 #include <glm/ext/vector_float3.hpp>
 
-constexpr int OPENGLVERSION_MAJOR = 3;
-constexpr int OPENGLVERSION_MINOR = 3;
+constexpr int OPENGLVERSION_MAJOR = 4;
+constexpr int OPENGLVERSION_MINOR = 2;
 constexpr int OPENGLVERSION = OPENGLVERSION_MAJOR * 10 + OPENGLVERSION_MINOR;
 
 using voidFunction = std::function<void()>;

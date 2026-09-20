@@ -9,6 +9,7 @@
 #include <future>
 #include <fstream>
 
+#include "../global.hpp"
 #include "nlohmann/json.hpp"
 #include "../glfwContext.hpp"
 #include "../camera.hpp"
@@ -298,15 +299,23 @@ void dimensionBase::update()
 	for (const auto& [pos, ch] : m_loadedChunks) {
 		ch->update();
 	}
+
+	time++; 
+	if (time > 24000) {
+		time = 0;
+	}
+	globalUniforms.time = time;
 }
 
 void dimensionBase::draw(float alpha)
-{
+{ 
+	//mainAssetManager::get<shader>("blockShader").set("time", (int)time);
+	
 	for (const auto& [pos, ch] : m_loadedChunks) {
 		ch->draw(alpha);
 	}
-}
-
+} 
+ 
 void dimensionBase::setBlock(int x, int y, int z, int id, int meta)
 {
 	if (y < 0 || y >= worldConstants::HEIGHT) {

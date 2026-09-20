@@ -1,5 +1,3 @@
-#include <iostream>
-
 #include "shader.hpp"
 
 static std::string readShader(std::filesystem::path path) {
@@ -67,16 +65,19 @@ shader::shader(std::filesystem::path vertexShader, std::filesystem::path fragmen
 shader::~shader()
 {
 	if (ID != 0) glDeleteProgram(ID);
+
+
 }
 
 
 int shader::getUniformLocation(std::string_view name)
 {
-	if (m_uniformLocationCache.find(name) != m_uniformLocationCache.end()) {
-		return m_uniformLocationCache[name];
+	std::string name_str(name);
+	if (m_uniformLocationCache.find(name_str) != m_uniformLocationCache.end()) {
+		return m_uniformLocationCache[name_str];
 	}
 	int loc = glGetUniformLocation(ID, name.data());
-	m_uniformLocationCache[name] = loc;
+	m_uniformLocationCache[name_str] = loc;
 	if (loc == -1) {
 		std::cerr << "Warning, uniform " << name << " not found!" << std::endl;
 		return -1;
