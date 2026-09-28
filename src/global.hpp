@@ -11,4 +11,18 @@ struct alignas(16) globalUniforms_t {
 
 static_assert(sizeof(globalUniforms_t) == 160, "UBO size must be multiple of 16!");
 
+
+struct alignas(16) BlackHoleInfo {
+    glm::vec3 pos;
+    float radius;
+};
+
+struct globalUniforms_blackHolesData_t {
+    BlackHoleInfo holes[4];
+};
+
+static_assert(sizeof(globalUniforms_blackHolesData_t) % 16 == 0, "UBO size must be multiple of 16!");
+
+
 inline globalUniforms_t globalUniforms{};
+inline globalUniforms_blackHolesData_t globalUniforms_blackHolesData{};

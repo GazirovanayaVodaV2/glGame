@@ -26,6 +26,10 @@ private:
 	static inline std::vector<Idrawable*> m_drawableObjects;
 
 	static inline int openGLVersion = OPENGLVERSION;
+	
+	static inline FrameBuffer* fbo[2] = {nullptr, nullptr};
+	static inline FrameBuffer* mainFBO = nullptr;
+	static inline postProcessorBuffer* ppbuf = nullptr;
 
 	glfwContext() = default;
 	~glfwContext();
@@ -50,6 +54,8 @@ public:
 
 	static void mainGameCycle();
 	static void useShader(shader& _shader);
+
+	static glm::vec2 getScreenSize();
 
 	/*vibe coded*/
 	template <typename T, typename Res, typename... Args>

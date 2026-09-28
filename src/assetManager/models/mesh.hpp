@@ -21,7 +21,7 @@ class mesh {
 private:
 	unsigned int VAO, VBO, EBO;
 	
-	std::vector<vertex> m_verticies;
+	std::vector<vertex> m_verticies;  
 	std::vector<unsigned int> m_indicies;
     std::vector<glm::vec2> uvs;
     size_t m_indicesCount = 0;

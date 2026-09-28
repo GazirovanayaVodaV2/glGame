@@ -61,6 +61,9 @@ inline void shader::set(std::string_view name, T value)
 	else if constexpr (std::is_same_v<T, float>) {
 		glUniform1f(location, value);
 	}
+	else if constexpr (std::is_same_v<T, glm::vec2>) {
+		glUniform2fv(location, 1, glm::value_ptr(value));
+	}
 	else if constexpr (std::is_same_v<T, glm::vec3>) {
 		glUniform3fv(location, 1, glm::value_ptr(value));
 	}
@@ -111,4 +114,45 @@ public:
 private:
 	static inline GLuint ubo{};
 	static inline GLuint m_bindingPoint{};
+};
+
+class FrameBuffer {
+private:
+	unsigned int FBO{}, colorTextures{}, depthRBO{};
+public:
+	FrameBuffer();
+	~FrameBuffer();
+
+	auto getFBO() {
+		return FBO;
+	}
+
+	auto getFrameTextureID() {
+		return colorTextures;
+	}
+};
+
+class postProcessorBuffer {
+private:
+	const float quadVertices[24] = {
+		-1.0f,  1.0f,  0.0f, 1.0f,  
+		-1.0f, -1.0f,  0.0f, 0.0f,
+		 1.0f, -1.0f,  1.0f, 0.0f,
+
+		-1.0f,  1.0f,  0.0f, 1.0f,
+		 1.0f, -1.0f,  1.0f, 0.0f,
+		 1.0f,  1.0f,  1.0f, 1.0f
+	};
+	unsigned int quadVAO{}, quadVBO{};
+
+	std::vector<shader*> pipeline;
+
+	void drawQuad();
+public:
+	postProcessorBuffer();
+	~postProcessorBuffer();
+
+	void draw(unsigned int fboTextureID, FrameBuffer* pingPongFBO[2]);
+
+	void addShader(shader* sh);
 };

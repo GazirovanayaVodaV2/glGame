@@ -9,6 +9,9 @@
 
 #include "global.hpp"
 
+#include "assetManager/assetManager.hpp"
+
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
     gameSettings::resolution = { width, height };
@@ -98,6 +101,12 @@ void glfwContext::init()
         });
 
     UniformBuffer<globalUniforms_t>::init();
+    UniformBuffer<globalUniforms_blackHolesData_t>::init(1);
+
+    fbo[0] = new FrameBuffer();
+    fbo[1] = new FrameBuffer();
+    mainFBO = new FrameBuffer();
+    ppbuf = new postProcessorBuffer();
 }
 
 void glfwContext::updateConfiguration()
@@ -106,6 +115,10 @@ void glfwContext::updateConfiguration()
 
 glfwContext::~glfwContext()
 {
+    delete fbo[0];
+    delete fbo[1];
+    delete mainFBO;
+    delete ppbuf;
     glfwTerminate();
 }
 
@@ -113,6 +126,10 @@ void glfwContext::mainGameCycle()
 {
     timer logicTimer, renderTimer;
     float accumulator = 0.0f, alpha = 0.0f;
+
+    auto& ppshader = mainAssetManager::get<shader>("basicPostProcess");
+    ppbuf->addShader(&ppshader);
+
     while (!glfwWindowShouldClose(m_window)) {
         const float targetFpsTime = 1000.0f / gameSettings::maxFps;
         
@@ -148,9 +165,11 @@ void glfwContext::mainGameCycle()
 
             globalUniforms.view = Camera::getView();
             globalUniforms.cameraPos = glm::vec4(Camera::getPos(),1.0f);
-            globalUniforms.projection = glfwContext::projection;
+            globalUniforms.projection = glfwContext::projection; 
+             
             UniformBuffer<globalUniforms_t>::update(globalUniforms);
 
+            glBindFramebuffer(GL_FRAMEBUFFER, mainFBO->getFBO());
             glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -159,7 +178,13 @@ void glfwContext::mainGameCycle()
                 object->tryDraw(alpha);
             }
 
-            glfwSwapBuffers(m_window);
+            
+            auto size = glfwContext::getScreenSize();
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+
+            ppbuf->draw(mainFBO->getFrameTextureID(), fbo);
+
+            glfwSwapBuffers(m_window); 
         }
     }
 }
@@ -181,6 +206,14 @@ void glfwContext::useShader(shader& _shader)
         glUseProgram(id);
         currentShaderID = id;
     }
+}
+
+glm::vec2 glfwContext::getScreenSize()
+{
+    int x = 0, y = 0;
+    glfwGetWindowSize(m_window, &x, &y);
+
+    return glm::vec2(static_cast<float>(x), static_cast<float>(y));
 }
 
 

@@ -8,6 +8,7 @@
 #include "src/camera.hpp"
 #include "src/Raycast.hpp"
 #include "src/player/player.hpp"
+#include "src/worldMap/blackHole.hpp"
 
 struct GameState {
     world* currentWorld = nullptr;
@@ -20,6 +21,10 @@ int main() {
     mainAssetManager::add<shader>("debugShader", "shaders/debug.glsl", "shaders/debug_frag.glsl");
     mainAssetManager::add<shader>("blockShader", "shaders/block.glsl", "shaders/block_frag.glsl");
     mainAssetManager::add<shader>("skyboxShader", "shaders/skybox.glsl", "shaders/skybox_frag.glsl");
+    mainAssetManager::add<shader>("blackHoleShader", "shaders/blackHole.glsl", "shaders/blackHole_frag.glsl");
+  
+    mainAssetManager::add<shader>("basicPostProcess", "shaders/basicPostProcess.glsl", "shaders/basicPostProcess_frag.glsl");
+   
     mainAssetManager::add<texture>("steve", "assets/textures/steve.png", false);
     mainAssetManager::add<texture>("stone", "assets/textures/stone.png", false);
     mainAssetManager::add<texture>("cobblestone", "assets/textures/cobblestone.png", false);
@@ -28,7 +33,18 @@ int main() {
     mainAssetManager::add<texture>("grassBlock", "assets/textures/grass_block_full.png", false);
     mainAssetManager::add<texture>("skybox", "assets/textures/skybox.png", false);
     //mainAssetManager::add<texture>("test", "assets/textures/test.png", false);
+    
     mainAssetManager::add<mesh>("steve", "assets/models/steve.obj");
+    mainAssetManager::add<mesh>("quad", std::vector<vertex>{
+        { {-1.0f, -1.0f, 0.0f}, {0.0f, 0.0f, 1.0f},  {0.0f, 0.0f} }, 
+        { { 1.0f, -1.0f, 0.0f}, {0.0f, 0.0f, 1.0f},  {1.0f, 0.0f} }, 
+        { { 1.0f,  1.0f, 0.0f}, {0.0f, 0.0f, 1.0f},  {1.0f, 1.0f} }, 
+        { {-1.0f,  1.0f, 0.0f}, {0.0f, 0.0f, 1.0f},  {0.0f, 1.0f} } 
+        },
+        std::vector<unsigned int>{
+        0, 1, 2, 
+        2, 3, 0 
+        });
     mainAssetManager::add<mesh>("block", "assets/models/block.obj");
     mainAssetManager::add<mesh>("multiTextureBlock", "assets/models/multiTextureBlock.obj");
     mainAssetManager::add<mesh>("skybox", "assets/models/skybox.obj");
@@ -53,7 +69,13 @@ int main() {
     auto player = std::make_unique<Player>(glm::vec3(0.0f, 16.0f, 0.0f));
     currentWorld->addGlobalObject(player.get());
     GameState gameState{ currentWorld, player.get() };
+
+    auto black_hole1 = std::make_unique<blackHole>();
+    currentWorld->addGlobalObject(black_hole1.get());
         
+    auto black_hole2 = std::make_unique<blackHole>(glm::vec3{5,16,5});
+    currentWorld->addGlobalObject(black_hole2.get());
+
     glfwSetCursorPosCallback(glfwContext::getWindow(), Camera::mouseCallback);
 
    /* glfwContext::addCycleEvent([player = player.get()]() {

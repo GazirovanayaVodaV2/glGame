@@ -15,12 +15,13 @@
 #include "../camera.hpp"
 #include "../collisionSystem.hpp"
 #include "../utils/threadPool/threadPool.hpp"
+#include "worldMap/blackHole.hpp"
 
 #define getField(JSON, NAME, TYPE) JSON.at(NAME).get<TYPE>()
 chunk::chunk(int xid, int yid, std::shared_ptr<chunkBuffers> buffers, std::filesystem::path* path)
 	: worldPath(path)
 {
-	initBuffers();
+	initBuffers(); 
 	this->ix = xid;
 	this->iy = yid;
 	m_buffers = buffers;
@@ -456,8 +457,26 @@ void world::update()
 
     static collisionMesh nearbyBlocksBoxes;
     
+	auto blackHoles = m_globalObjects | std::views::filter(
+		[](ISceneObject* drawableObj) -> bool {
+			return dynamic_cast<blackHole*>(drawableObj) != nullptr;
+		}
+	) | std::views::transform([](ISceneObject* obj) -> blackHole* {
+		return static_cast<blackHole*>(obj);
+		}) | std::views::take(4);
+
+	std::size_t i = 0;
+	for (blackHole* bh : blackHoles) {
+		globalUniforms_blackHolesData.holes[i].pos = bh->getPos();
+		globalUniforms_blackHolesData.holes[i].radius = bh->getRadius();
+		i++;
+	}
+
+	UniformBuffer<globalUniforms_blackHolesData_t>::update(globalUniforms_blackHolesData);
+
+
     for (auto& obj : m_globalObjects) {
-        obj->SaveStateForInterpolation();
+        obj->SaveStateForInterpolation(); 
         obj->update(); 
 
         if (obj->getPos().y < -100.0f) {
