@@ -1,11 +1,14 @@
+#include <optional>
+
 #include "shader.hpp"
+#include "renderer/renderer.hpp"
 #include "glfwContext.hpp"
 
-static std::string readShader(std::filesystem::path path) {
+static std::optional<std::string> readShader(std::filesystem::path path) {
 	std::ifstream code(path);
 	if (!code.is_open()) {
-		std::cerr << "Failed to open shader! Path: " << path << std::endl;
-		return "";
+		logger::Console::print<logger::Level::ERROR>("Failed to open shader! Path: " + path.string());
+		return std::nullopt;
 	}
 
 	std::stringstream ss;
@@ -22,6 +25,7 @@ unsigned int shader::compile(std::string code, shader::types type)
 	glCompileShader(shader);
 	checkErrors(shader, (shader::types)type);
 
+	logger::Console::print<logger::Level::INFO>("Shader compiled successfully!");
 	return shader;
 }
 
@@ -34,40 +38,44 @@ void shader::checkErrors(uint32_t shader, shader::types type)
 		glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
 		if (!success) {
 			glGetShaderInfoLog(shader, 1024, NULL, log);
-			std::cerr << "ERROR::SHADER_COMPILATION_ERROR of type: " << (int)type << "\n" << log << "\n -- --------------------------------------------------- -- " << std::endl;
+			logger::Console::print<logger::Level::ERROR>("ERROR::SHADER_COMPILATION_ERROR of type: " + std::to_string((int)type) + "\n" + log + "\n -- --------------------------------------------------- -- ");
 		}
 	}
 	else {
 		glGetShaderiv(shader, GL_LINK_STATUS, &success);
 		if (!success) {
 			glGetProgramInfoLog(shader, 1024, NULL, log);
-			std::cerr << "ERROR::PROGRAM_LINKING_ERROR of type: " << (int)type << "\n" << log << "\n -- --------------------------------------------------- -- " << std::endl;
+			logger::Console::print<logger::Level::ERROR>("ERROR::PROGRAM_LINKING_ERROR of type: " + std::to_string((int)type) + "\n" + log + "\n -- --------------------------------------------------- -- ");
 		}
 	}
 }
 
 shader::shader(std::filesystem::path vertexShader, std::filesystem::path fragmentShader)
 {
-	std::string vertexCode = readShader(vertexShader);
-	std::string fragmentCode = readShader(fragmentShader);
-	auto vertex = compile(vertexCode, types::vertex);
-	auto fragment = compile(fragmentCode, types::fragment);
+	auto vertexCode = readShader(vertexShader);
+	auto fragmentCode = readShader(fragmentShader);
 
-	ID = glCreateProgram();
-	glAttachShader(ID, vertex);
-	glAttachShader(ID, fragment);
-	glLinkProgram(ID);
-	checkErrors(ID, types::program);
+	if (vertexCode && fragmentCode) {
+		auto vertex = compile(vertexCode.value(), types::vertex);
+		auto fragment = compile(fragmentCode.value(), types::fragment);
 
-	glDeleteShader(vertex);
-	glDeleteShader(fragment);
+		ID = glCreateProgram();
+		glAttachShader(ID, vertex);
+		glAttachShader(ID, fragment);
+		glLinkProgram(ID);
+		checkErrors(ID, types::program);
+
+		glDeleteShader(vertex);
+		glDeleteShader(fragment);
+	}
+	else {
+		logger::Console::print<logger::Level::ERROR>("Failed to compile shader due failed reading!");
+	}
 }
 
 shader::~shader()
 {
 	if (ID != 0) glDeleteProgram(ID);
-
-
 }
 
 
@@ -80,7 +88,7 @@ int shader::getUniformLocation(std::string_view name)
 	int loc = glGetUniformLocation(ID, name.data());
 	m_uniformLocationCache[name_str] = loc;
 	if (loc == -1) {
-		std::cerr << "Warning, uniform " << name << " not found!" << std::endl;
+		logger::Console::print<logger::Level::WARNING>("Uniform " + name_str + " not found!");
 		return -1;
 	}
 	return loc;
@@ -107,7 +115,7 @@ FrameBuffer::FrameBuffer()
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, depthRBO);
 
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-		std::cerr << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
+		logger::Console::print<logger::Level::ERROR>("Framebuffer is not complete!");
 	}
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -116,7 +124,7 @@ FrameBuffer::FrameBuffer()
 FrameBuffer::~FrameBuffer()
 {
 	glDeleteTextures(1, &colorTextures);
-	glDeleteRenderbuffers(1, &FBO);
+	glDeleteFramebuffers(1, &FBO);
 	glDeleteRenderbuffers(1, &depthRBO);
 }
 
@@ -138,12 +146,16 @@ postProcessorBuffer::postProcessorBuffer()
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
 	glEnableVertexAttribArray(1);
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+
+	logger::Console::print<logger::Level::INFO>("Post processor buffer initialized");
 }
 
 postProcessorBuffer::~postProcessorBuffer()
 {
 	glDeleteVertexArrays(1, &quadVAO);
 	glDeleteBuffers(1, &quadVBO);
+
+	logger::Console::print<logger::Level::INFO>("Post processor buffer destroyed");
 }
 
 void postProcessorBuffer::draw(unsigned int fboTextureID, FrameBuffer* pingPongFBO[2])
@@ -168,7 +180,7 @@ void postProcessorBuffer::draw(unsigned int fboTextureID, FrameBuffer* pingPongF
 			glBindFramebuffer(GL_FRAMEBUFFER, pingPongFBO[pingPongIndex]->getFBO());
 		}
 		auto& sh = pipeline[i];
-		glfwContext::useShader(*sh);
+		renderer::useShader(*sh);
 		sh->set<int>("screenTexture", 0);
 
 		glActiveTexture(GL_TEXTURE0);
@@ -188,4 +200,6 @@ void postProcessorBuffer::draw(unsigned int fboTextureID, FrameBuffer* pingPongF
 void postProcessorBuffer::addShader(shader* sh)
 {
 	pipeline.push_back(sh);
+
+	logger::Console::print<logger::Level::DEBUG>("Added post processor shader to pipeline");
 }

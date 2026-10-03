@@ -5,10 +5,10 @@
 #include <memory>
 #include <utility>
 
-#include "shader.hpp"
 #include "textures/texture.hpp"
 #include "assetManager/models/mesh.hpp"
 
+#include "../shader/shader.hpp"
 
 /*Vibe coded*/
 template <typename T>

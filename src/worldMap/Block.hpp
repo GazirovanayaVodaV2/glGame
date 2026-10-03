@@ -1,11 +1,11 @@
 #pragma once
-#include "ISceneObject.hpp"
-#include "assetManager/models/basicModel.hpp"
-
 #include <vector>
-#include <assetManager/textures/texture.hpp>
 
-#include "../collisionSystem.hpp"
+#include "ISceneObject.hpp"
+
+#include "../assetManager/models/basicModel.hpp"
+#include "../assetManager/textures/texture.hpp"
+#include "../collisionSystem/collisionSystem.hpp"
 
 enum class BlockMaterial {
     Air,

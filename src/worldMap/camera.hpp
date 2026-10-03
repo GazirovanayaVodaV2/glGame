@@ -2,8 +2,10 @@
 
 #include <glm/vec3.hpp>
 #include <glm/matrix.hpp>
-#include <openGLIncluder.hpp>
-#include "Icontrollable.hpp"
+
+#include "openGLIncluder.hpp"
+
+#include "../Interfaces/Icontrollable.hpp"
 
 class Camera{
 private:

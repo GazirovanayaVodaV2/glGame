@@ -4,7 +4,8 @@
 
 #include "../assetManager/assetManager.hpp"
 #include "../glfwContext.hpp"
-#include "../camera.hpp"
+#include "../worldMap/camera.hpp"
+#include "../renderer/renderer.hpp"
 
 glm::vec3 ISceneObject::checkCollision(const collisionMesh& otherCollisionMesh, const Transform& transform)
 {
@@ -101,9 +102,9 @@ void drawDebugAABB_impl(collisionSystem::AABB box, glm::vec3 objectPos)
     };
 
     auto& debugShader = mainAssetManager::get<shader>("debugShader");
-    glfwContext::useShader(debugShader);
+    renderer::useShader(debugShader);
     debugShader.set<glm::mat4>("view", Camera::getView());
-    debugShader.set<glm::mat4>("projection", glfwContext::projection);
+    debugShader.set<glm::mat4>("projection", renderer::getProjection());
 
     static GLuint vao = 0, vbo = 0;
     if (vao == 0) {

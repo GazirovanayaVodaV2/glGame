@@ -1,8 +1,10 @@
 #include <iostream>
+
 #include "texture.hpp"
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
-#include <openGLIncluder.hpp>
+
+#include "openGLIncluder.hpp"
 
 #define RGBA(r,g,b,a) r,g,b,a
 

@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Idrawable.hpp"
-#include "Icontrollable.hpp"
-#include "../transform.hpp"
+#include "../Interfaces/Idrawable.hpp"
+#include "../Interfaces/Icontrollable.hpp"
+#include "../utils/transform/transform.hpp"
 #include "../assetManager/models/mesh.hpp"
-#include "../collisionSystem.hpp"
+#include "../collisionSystem/collisionSystem.hpp"
 
 class ISceneObject : public Icontrollable, public Idrawable {
 protected:

@@ -1,21 +1,26 @@
 #include "scene.hpp"
 
-#include "assetManager/assetManager.hpp"
 #include <algorithm>
 #include <vector>
-#include "Block.hpp"
-#include <assetManager/models/mesh.hpp>
 #include <bit>
 #include <future>
 #include <fstream>
 
-#include "../global.hpp"
 #include "nlohmann/json.hpp"
-#include "../glfwContext.hpp"
-#include "../camera.hpp"
-#include "../collisionSystem.hpp"
-#include "../utils/threadPool/threadPool.hpp"
+
+#include "assetManager/assetManager.hpp"
 #include "worldMap/blackHole.hpp"
+#include "Block.hpp"
+#include "assetManager/models/mesh.hpp"
+
+#include "../global.hpp"
+#include "../glfwContext.hpp"
+#include "../worldMap/camera.hpp"
+#include "../collisionSystem/collisionSystem.hpp"
+#include "../utils/threadPool/threadPool.hpp"
+#include "../renderer/renderer.hpp"
+#include "../application/application.hpp"
+#include "../utils/logger/logger.hpp"
 
 #define getField(JSON, NAME, TYPE) JSON.at(NAME).get<TYPE>()
 chunk::chunk(int xid, int yid, std::shared_ptr<chunkBuffers> buffers, std::filesystem::path* path)
@@ -740,6 +745,7 @@ std::unique_ptr<ChunkRawData> meshBuilder::buildMesh(const blockArray& blocks, c
         }
 		id++;
     }
+
 	return result;
 }
 
@@ -769,11 +775,13 @@ void worldManager::loadWorld(int id)
 		return;
 	}
 	currentWorld = m_worlds[id].get();
-	glfwContext::deleteAllRenderTargets();
-	glfwContext::deleteAllGameEvents();
-	glfwContext::addDrawTarget(currentWorld);
-	glfwContext::addCycleEvent([]() {
+	renderer::deleteAllRenderTargets();
+	application::deleteAllCycleEvents();
+	renderer::addDrawTarget(currentWorld);
+	application::addCycleEvent([]() {
 		currentWorld->update();
 		currentWorld->loadChunksFromPos(Camera::getPos(), 16);
 		}, false);
+
+	logger::Console::print<logger::Level::INFO>("Loaded world!");
 }

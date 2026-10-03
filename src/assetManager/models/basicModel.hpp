@@ -1,14 +1,14 @@
 #pragma once
 #include <string>
+
 #include "mesh.hpp"
-#include "assetManager/textures/texture.hpp"
-#include "assetManager/assetManager.hpp"
-#include "shader.hpp"
 
-#include "transform.hpp"
-
-#include "worldMap/ISceneObject.hpp"
-#include <collisionSystem.hpp>
+#include "../textures/texture.hpp"
+#include "../assetManager.hpp"
+#include "../../shader/shader.hpp"
+#include "../../utils/transform/transform.hpp"
+#include "../../worldMap/ISceneObject.hpp"
+#include "../../collisionSystem/collisionSystem.hpp"
 
 class basicModel : public ISceneObject {
 private:

@@ -5,10 +5,11 @@
 #include "assetManager/models/basicModel.hpp"
 #include "worldMap/Block.hpp"
 #include "worldMap/scene.hpp"
-#include "src/camera.hpp"
-#include "src/Raycast.hpp"
+#include "src/worldMap/camera.hpp"
+#include "src/rayCast/Raycast.hpp"
 #include "src/player/player.hpp"
 #include "src/worldMap/blackHole.hpp"
+#include "application/application.hpp"
 
 struct GameState {
     world* currentWorld = nullptr;
@@ -17,7 +18,8 @@ struct GameState {
 };
 
 int main() {   
-    glfwContext::init();
+    application::init();
+
     mainAssetManager::add<shader>("debugShader", "shaders/debug.glsl", "shaders/debug_frag.glsl");
     mainAssetManager::add<shader>("blockShader", "shaders/block.glsl", "shaders/block_frag.glsl");
     mainAssetManager::add<shader>("skyboxShader", "shaders/skybox.glsl", "shaders/skybox_frag.glsl");
@@ -78,19 +80,7 @@ int main() {
 
     glfwSetCursorPosCallback(glfwContext::getWindow(), Camera::mouseCallback);
 
-   /* glfwContext::addCycleEvent([player = player.get()]() {
-        world* currentWorld = worldManager::getCurrentWorld();
-        if (!currentWorld) return;
-
-        dimensionBase* dimension = currentWorld->getCurrentDimension();
-        if (!dimension) return;
-
-        GLFWwindow* window = glfwContext::getWindow();
-
-        player->handleInput(window);
-        player->updatePlayer(dimension);
-        }, true); */
-   glfwContext::mainGameCycle();
+    application::run();
 
     return 0;
 }

@@ -1,12 +1,12 @@
 #include <algorithm>
 #include <iostream>
 #include <functional>
+
 #include "player.hpp"
-#include "timer.hpp"
 
+#include "../utils/timer/timer.hpp"
 #include "../glfwContext.hpp"
-
-#include "../Raycast.hpp"
+#include "../Raycast/Raycast.hpp"
 
 void Player::handleCollision(glm::vec3 mtv)
 {

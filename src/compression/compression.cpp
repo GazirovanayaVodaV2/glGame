@@ -1,4 +1,5 @@
 #include "compression.hpp"
+
 #include <algorithm>
 
 void compression::compress(std::span<std::uint16_t> data)

@@ -1,7 +1,7 @@
 #pragma once
 #include <iostream>
 #include <fstream>
-#include <glad/glad.h>
+#include <string_view>
 #include <filesystem>
 #include <unordered_map>
 
@@ -9,7 +9,9 @@
 #include <glm/vec3.hpp> 
 #include <glm/mat4x4.hpp> 
 
-#include <string_view>
+#include <glad/glad.h>
+
+#include "utils/logger/logger.hpp"
 
 class shader {
 public:

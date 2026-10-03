@@ -1,10 +1,11 @@
 #pragma once
-#include <glm/glm.hpp>
 #include <vector>
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <initializer_list>
+
+#include <glm/glm.hpp>
 
 namespace collisionSystem {
 	struct AABB {

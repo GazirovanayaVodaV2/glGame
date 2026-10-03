@@ -3,8 +3,10 @@
 #include <vector>
 #include <iostream>
 
-#include "gameSettings.hpp"
 #include "nlohmann/json.hpp"
+
+#include "gameSettings.hpp"
+#include "utils/logger/logger.hpp"
 
 static std::filesystem::path windowConfigPath = "configs/settings.json";
 
@@ -26,7 +28,7 @@ void loadSettings()
 
     std::ifstream configJson(windowConfigPath);
     if (!configJson.is_open()) {
-        std::cerr << "Failed to open config! Path: " << windowConfigPath << std::endl;
+		logger::Console::print<logger::Level::ERROR>("Failed to open config! Path: " + windowConfigPath.string());
         std::exit(-1);
     }
 
@@ -43,4 +45,6 @@ void loadSettings()
     gameSettings::resolution = { resVector[0], resVector[1]};
 
     gameSettings::ratio = (float)gameSettings::resolution.first / (float)gameSettings::resolution.second;
+	
+    logger::Console::print<logger::Level::INFO>("Settings loaded successfully");
 }

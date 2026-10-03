@@ -2,11 +2,11 @@
 #include <glm/ext/matrix_transform.hpp>
 
 #include "camera.hpp"
-#include "gameSettings.hpp"
-#include "glfwContext.hpp"
-#include "timer.hpp"
 
-#include "global.hpp"
+#include "../gameSettings/gameSettings.hpp"
+#include "../glfwContext.hpp"
+#include "../utils/timer/timer.hpp"
+#include "../global.hpp"
 
 glm::vec3 Camera::pos = glm::vec3(0.0f, 0.0f, 3.0f);
 glm::vec3 Camera::front = glm::vec3(0.0f, 0.0f, -1.0f);

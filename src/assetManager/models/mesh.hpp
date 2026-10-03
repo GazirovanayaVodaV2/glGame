@@ -1,16 +1,16 @@
 #pragma once
 
+#include <filesystem>
+#include <vector>
+#include <ranges>
+
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 
-#include <filesystem>
-#include <vector>
-
 #include <glm/vec3.hpp>
 #include <glm/vec2.hpp>
 
-#include <ranges>
 
 struct vertex {
 	glm::vec3 pos, normal;

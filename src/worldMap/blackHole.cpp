@@ -1,6 +1,8 @@
 #include "blackHole.hpp"
 #include "glfwContext.hpp"
 
+#include "../renderer/renderer.hpp"
+
 blackHole::blackHole(glm::vec3 spawnPos)
 {
     m_model = std::make_unique<basicModel>("stone", "quad", "blackHoleShader");
@@ -22,7 +24,7 @@ void blackHole::draw(float alpha)
     );
 
     auto& bhshader = mainAssetManager::get<shader>("blackHoleShader");
-    glfwContext::useShader(bhshader);
+    renderer::useShader(bhshader);
 
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, fbo.getFrameTextureID());

@@ -1,16 +1,18 @@
 #pragma once
 
 #include <memory>
-#include <glm/glm.hpp>
-#include <openGLIncluder.hpp>
 
-#include "transform.hpp"
+#include <glm/glm.hpp>
+
+#include "openGLIncluder.hpp"
 #include "worldMap/ISceneObject.hpp"
 #include "camera.hpp"
 #include "assetManager/models/mesh.hpp"
 #include "assetManager/models/basicModel.hpp"
+
+#include "../utils/transform/transform.hpp"
 #include "../worldMap/scene.hpp"
-#include <collisionSystem.hpp>
+#include "../collisionSystem/collisionSystem.hpp"
 
 
 class blackHole : public ISceneObject {

@@ -1,6 +1,8 @@
 #pragma once
-#include "glm/vec3.hpp"
-#include "worldMap/scene.hpp"
+#include <glm/vec3.hpp>
+
+#include "../worldMap/scene.hpp"
+
 struct RaycastHit {
 	enum class HitType {
 		None,

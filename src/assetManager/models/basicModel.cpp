@@ -1,11 +1,12 @@
 #include "basicModel.hpp"
-#include "glfwContext.hpp"
-#include "camera.hpp"
+
+#include "../../worldMap/camera.hpp"
+#include "../../renderer/renderer.hpp"
 
 void basicModel::draw(float alpha)
 {
     auto model = m_transform.getInterpolated(m_lastState, alpha);
-    glfwContext::useShader(m_shader);
+    renderer::useShader(m_shader);
     m_texture.bind();
     m_mesh.bind();
 

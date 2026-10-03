@@ -5,10 +5,6 @@
 #include <memory>
 #include <utility>
 #include <bitset>
-#include "ISceneObject.hpp"
-#include "Block.hpp"
-#include "glm/vec2.hpp"
-
 #include <assetManager/models/mesh.hpp>
 #include <unordered_map>
 #include <cstdint>
@@ -17,13 +13,15 @@
 #include <semaphore>
 #include <thread>
 #include <algorithm>
-#include <bitset>
 #include <tuple>
+
+#include <glm/vec2.hpp>
+
+#include "ISceneObject.hpp"
+#include "Block.hpp"
 
 #include "../compression/compression.hpp"
 #include "../utils/minTypes/minTypes.hpp"
-
-#include "Block.hpp"
 
 namespace worldConstants {
 	static constexpr auto WIDTH = minUint<16>();

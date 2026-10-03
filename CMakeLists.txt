@@ -107,6 +107,7 @@ target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${nlohmann_json_SOURCE_
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE 
     APP_NAME="${PROJECT_NAME}"
+    "$<$<CONFIG:Debug>:_DEBUG>"
 )
 
 find_package(OpenGL REQUIRED)
