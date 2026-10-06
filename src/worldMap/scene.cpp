@@ -38,13 +38,21 @@ chunk::chunk(int xid, int yid, std::shared_ptr<chunkBuffers> buffers, std::files
 void chunk::compress()
 {
 	if (!compressed && isMeshBuilded()) {
-		m_compressedChunk.compress(m_buffers->blocks->m_array);
-		m_compressedChunkMeta.compress(m_buffers->blockMeta->m_array);
+		
+		
+		if (m_compressedChunk.compress(m_buffers->blocks->m_array) 
+			== compression::Result::SUCCESS) 
+		{
+			m_buffers->blocks->m_array.clear();
+			m_buffers->blocks->m_array.shrink_to_fit();
+		}
 
-		m_buffers->blocks->m_array.clear();
-		m_buffers->blocks->m_array.shrink_to_fit();
-		m_buffers->blockMeta->m_array.clear();
-		m_buffers->blockMeta->m_array.shrink_to_fit();
+		if (m_compressedChunkMeta.compress(m_buffers->blockMeta->m_array)
+			== compression::Result::SUCCESS) 
+		{
+			m_buffers->blockMeta->m_array.clear();
+			m_buffers->blockMeta->m_array.shrink_to_fit();
+		}
 
 		compressed = true;
 	}
@@ -67,17 +75,6 @@ void chunk::update()
 			entity->update();
 		}
 
-		/*if (meshBuilderDirty && !m_isBuildingMesh) {
-			m_isBuildingMesh = true;
-			meshBuilderDirty = false;
-
-			m_meshFuture = std::async(std::launch::async, [blocks = *m_buffers->blocks,
-				meta = *m_buffers->blockMeta,
-				height = *m_buffers->heightMap]() {
-				meshBuilder builder;
-				return builder.buildMesh(blocks, meta, height);
-				});
-		}*/
 		if (meshBuilderDirty && !m_isBuildingMesh) {
 			m_isBuildingMesh = true;
 			meshBuilderDirty = false;
@@ -102,7 +99,7 @@ void chunk::update()
 				for (const auto& rawMesh : rawData->meshes) {
 					if (rawMesh.vertices.empty() || rawMesh.indices.empty()) {
 						blockId++;
-						continue; // Skip empty meshes
+						continue;
 					}
 					SubChunkModel sub;
 					sub.subMesh = std::make_unique<mesh>(std::move(rawMesh.vertices), std::move(rawMesh.indices));
@@ -184,6 +181,11 @@ BlockId_t chunk::getBlock(inChunkX_t lx, inChunkY_t ly, inChunkZ_t lz)
 	}
 	if (!m_buffers->blocks) return 0;
 	size_t index = getIndex(lx, ly, lz);
+
+	if (index >= worldConstants::CHUNK_VOLUME) {
+		return 0;
+	}
+
 	return (m_buffers->blocks->m_array)[index];
 }
 
@@ -599,12 +601,11 @@ std::unique_ptr<ChunkRawData> meshBuilder::buildMesh(const blockArray& blocks, c
     }
 
 	auto isSolid = [&block_array](int x, int y, int z) -> bool {
-		if (x < 0 || x >= worldConstants::WIDTH ||
-			y < 0 || y >= worldConstants::HEIGHT ||
-			z < 0 || z >= worldConstants::LENGTH) {
+		auto i = chunk::getIndex(x, y, z);
+		if (i >= worldConstants::CHUNK_VOLUME) {
 			return false;
 		}
-		return block_array[chunk::getIndex(x, y, z)] != 0;
+		return block_array[i] != 0;
 		};
 
 	auto addFace = [](std::vector<vertex>& vertices, std::vector<unsigned int>& indices,
@@ -613,7 +614,7 @@ std::unique_ptr<ChunkRawData> meshBuilder::buildMesh(const blockArray& blocks, c
 		const glm::vec3& normal,
 		const glm::vec2 uvs[4])
 		{
-			unsigned int indexOffset = static_cast<unsigned int>(vertices.size());
+			const auto indexOffset = static_cast<unsigned int>(vertices.size());
 			vertices.emplace_back(p0, normal, uvs[0]);
 			vertices.emplace_back(p1, normal, uvs[1]);
 			vertices.emplace_back(p2, normal, uvs[2]);

@@ -28,7 +28,7 @@ namespace logger {
 	class Ilogger {
 	public:
 		template<logger::Level L = logger::Level::DEBUG>
-		static void print(std::string_view ms) {
+		static inline void print(std::string_view ms) {
 			constexpr unsigned int current_level_bit = static_cast<unsigned int>(L);
 			constexpr bool is_enabled = (Mask & current_level_bit) != 0;
 
@@ -54,7 +54,7 @@ namespace logger {
 	public:
 		friend class Ilogger<Console_impl<Mask>, Mask>;
 	private:
-		static void print_impl(std::string_view ms) {
+		static inline void print_impl(std::string_view ms) {
 			std::cout << ms << std::endl;
 		}
 	};
