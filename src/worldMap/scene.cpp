@@ -79,11 +79,11 @@ void chunk::update()
 			m_isBuildingMesh = true;
 			meshBuilderDirty = false;
 			m_meshFuture = threadPool::instance().enqueue([blocks = *m_buffers->blocks,
-												meta = *m_buffers->blockMeta,
-												height = *m_buffers->heightMap]() {
-				meshBuilder builder;
-				return builder.buildMesh(blocks, meta, height);
-			});
+				meta = *m_buffers->blockMeta,
+				height = *m_buffers->heightMap]() {
+					meshBuilder builder;
+					return builder.buildMesh(blocks, meta, height);
+				});
 		}
 		if (m_isBuildingMesh && m_meshFuture.valid()) {
 			if (m_meshFuture.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
@@ -119,7 +119,7 @@ void chunk::update()
 				subModel.model->SaveStateForInterpolation();
 				subModel.model->update();
 			}
-			
+
 		}
 	}
 }
@@ -167,16 +167,45 @@ void chunk::setBlock(inChunkX_t x, inChunkY_t y, inChunkZ_t z, BlockId_t id, Blo
 		}
 
 		if (loaded) {
-			m_changes[inChunkPos_t{x,y,z}] = { id, meta };
+			m_changes[inChunkPos_t{ x,y,z }] = { id, meta };
 		}
 
 		meshBuilderDirty = true;
 	}
 }
 
+void chunk::placePointLight(int x, int y, int z, glm::ivec3 color, float radius, float power)
+{
+	glm::vec3 _pos = {
+		x + 0.5f,
+		y + 0.5f,
+		z + 0.5f
+	};
+
+	auto it = std::ranges::find_if(m_lights.points, [_pos](const auto& val) {
+		return val.m_pos == _pos;
+		});
+
+	if (power == 0.0f) {
+		if (it != m_lights.points.end()) {
+			m_lights.points.erase(it);
+		}
+		return;
+	}
+
+	if (it != m_lights.points.end()) {
+		it->m_color = color;
+		it->m_radius = radius;
+		it->m_power = power;
+	}
+	else {
+		m_lights.points.emplace_back(lightSystem::point{ _pos, color, power, radius });
+	}
+}
+
 BlockId_t chunk::getBlock(inChunkX_t lx, inChunkY_t ly, inChunkZ_t lz)
 {
-	if (compressed) {
+	if (compressed) { 
 		decompress();
 	}
 	if (!m_buffers->blocks) return 0;
@@ -287,6 +316,32 @@ void dimensionBase::loadChunksFromPos(glm::vec3 pos, int renderDistance, int see
 			generateChunkPrep(x, z, seed);
 		}
 	}
+	
+	m_sortedChunks.clear();
+	m_sortedChunks.reserve(m_loadedChunks.size());
+	for (auto& [chunkPos, chunkPtr] : m_loadedChunks) {
+		m_sortedChunks.push_back({ chunkPos, chunkPtr.get() });
+	}
+
+	glm::vec3 cameraPos = Camera::getPos();
+	std::ranges::sort(m_sortedChunks, [cameraPos, centerChunkX, centerChunkZ]
+	(const std::pair<chunkPosT, chunk*> a, const std::pair<chunkPosT, chunk*> b) {
+		auto [ax, az] = a.first;
+		auto [bx, bz] = b.first;
+
+		int distSqA = (ax - centerChunkX) * (ax - centerChunkX) + (az - centerChunkZ) * (az - centerChunkZ);
+		int distSqB = (bx - centerChunkX) * (bx - centerChunkX) + (bz - centerChunkZ) * (bz - centerChunkZ);
+
+		if (distSqA != distSqB) {
+			return distSqA < distSqB;
+		}
+
+		if (ax != bx) {
+			return ax < bx;
+		}
+		return az < bz;
+		});
+
 
 	int activeRadius = 2; 
     for (auto& [chunkPos, chunkPtr] : m_loadedChunks) {
@@ -308,12 +363,34 @@ void dimensionBase::update()
 		ch->update();
 	}
 
+	auto allLightsView = m_sortedChunks
+		| std::views::transform([](const auto& item) {
+		return std::span(item.second->m_lights.points);
+			})
+		| std::views::join
+		| std::views::transform([](const auto& light) -> pointLightData {
+				pointLightData lightData;
+				lightData.m_pos = light.m_pos;
+				lightData.m_color.r = light.m_color.r / 255.0f;
+				lightData.m_color.g = light.m_color.g / 255.0f;
+				lightData.m_color.b = light.m_color.b / 255.0f;
+				lightData.m_radius = light.m_radius;
+				lightData.m_power = light.m_power;
+				return lightData;
+			})
+		| std::views::take(lightSystem::point::maxCount);
+
+	auto [in_it, out_it] = std::ranges::copy(allLightsView, &globalUniforms_pointLightData.lights[0]);
+	globalUniforms_pointLightData.activeLights = std::distance(&globalUniforms_pointLightData.lights[0], out_it);
+	 
+	UniformBuffer<globalUniforms_pointLightData_t>::update(globalUniforms_pointLightData);
+	
 	time++; 
 	if (time > 24000) {
 		time = 0;
 	}
 	globalUniforms.time = time;
-}
+}  
 
 void dimensionBase::draw(float alpha)
 { 
@@ -341,6 +418,19 @@ void dimensionBase::setBlock(int x, int y, int z, int id, int meta)
 	}
 
 	targetChunk->setBlock(localX, y, localZ, id, meta);
+}
+
+void dimensionBase::placePointLight(int x, int y, int z, glm::ivec3 color, float radius, float power)
+{
+	auto [gridX, gridZ] = worldConstants::worldCoordToChunkCoord(x, z);
+
+	auto targetChunk = getChunk(gridX, gridZ);
+
+	if (!targetChunk) {
+		return;
+	}
+
+	targetChunk->placePointLight(x, y, z, color, radius, power);
 }
 
 BlockId_t dimensionBase::getBlock(int x, int y, int z)
@@ -480,7 +570,6 @@ void world::update()
 	}
 
 	UniformBuffer<globalUniforms_blackHolesData_t>::update(globalUniforms_blackHolesData);
-
 
     for (auto& obj : m_globalObjects) {
         obj->SaveStateForInterpolation(); 
@@ -629,7 +718,7 @@ std::unique_ptr<ChunkRawData> meshBuilder::buildMesh(const blockArray& blocks, c
 		};
 
 	auto getFaceUVs = [](int id, int faceIndex, glm::vec2 outUVs[4]) {
-		auto blockUVs = BlockTable::getBlock(id)->getMesh().getUV();
+		auto& blockUVs = BlockTable::getBlock(id)->getMesh().getUV();
 		size_t count = blockUVs.size();
 
 		if (count >= 24 && count < 36) {
@@ -771,11 +860,11 @@ worldManager::worldManager()
 
 void worldManager::loadWorld(int id)
 {
-	if (id >= m_worlds.size())
+	if (id >= lists.size())
 	{
 		return;
 	}
-	currentWorld = m_worlds[id].get();
+	currentWorld = lists[id].get();
 	renderer::deleteAllRenderTargets();
 	application::deleteAllCycleEvents();
 	renderer::addDrawTarget(currentWorld);

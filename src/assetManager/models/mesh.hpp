@@ -88,7 +88,7 @@ public:
 
     const std::vector<vertex>& getVertices() const { return m_verticies; }
     const std::vector<unsigned int>& getIndices() const { return m_indicies; }
-    auto& getUV() {
+    const auto const& getUV() {
         /*
         return m_verticies | std::views::transform([](const vertex& v) -> const glm::vec2& {
             return v.uv;

@@ -65,7 +65,7 @@ int main() {
 
     worldManager::createWorld("test", 0, worldRules{});
     worldManager::loadWorld(0);
-    world* currentWorld = worldManager::getCurrentWorld();
+    world* currentWorld = worldManager::currentWorld;
     currentWorld->changeDimension(worldDimension::Overworld);
 
     auto player = std::make_unique<Player>(glm::vec3(0.0f, 16.0f, 0.0f));

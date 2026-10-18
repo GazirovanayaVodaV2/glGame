@@ -132,7 +132,7 @@ void Player::keyCallback(GLFWwindow* window)
 
 void Player::mouseCallBack(GLFWwindow* window)
 {
-    auto currentWorld = worldManager::getCurrentWorld();
+    auto currentWorld = worldManager::currentWorld;
     if (currentWorld) {
         auto currentDimension = currentWorld->getCurrentDimension();
         if (currentDimension) {
@@ -154,6 +154,8 @@ void Player::mouseCallBack(GLFWwindow* window)
                         bool Zcoll = !!collisionSystem::checkCollisionZ(playerBox, blockBox);
                         if (!(Xcoll && Ycoll && Zcoll)) {
                             currentDimension->setBlock(hit.adjacentBlockPos.x, hit.adjacentBlockPos.y, hit.adjacentBlockPos.z, m_currentBLock);
+                            currentDimension->placePointLight(hit.adjacentBlockPos.x, hit.adjacentBlockPos.y, hit.adjacentBlockPos.z,
+                                {255, 255, 255}, 3.0f, 2.0f);
                         }
                     }
                 }

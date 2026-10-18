@@ -19,6 +19,7 @@ void renderer::init() {
 
     UniformBuffer<globalUniforms_t>::init();
     UniformBuffer<globalUniforms_blackHolesData_t>::init(1);
+    UniformBuffer<globalUniforms_pointLightData_t>::init(2);
 
     fbo[0] = new FrameBuffer();
     fbo[1] = new FrameBuffer();

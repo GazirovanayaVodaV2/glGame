@@ -16,12 +16,15 @@
 #include <tuple>
 
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 #include "ISceneObject.hpp"
 #include "Block.hpp"
 
 #include "../compression/compression.hpp"
 #include "../utils/minTypes/minTypes.hpp"
+#include "../shader/lightSystem/lightSystem.hpp"
+
 
 namespace worldConstants {
 	static constexpr auto WIDTH = minUint<16>();
@@ -131,7 +134,7 @@ private:
 	compression m_compressedChunk;
 	compression m_compressedChunkMeta;
 	std::unordered_map<inChunkPos_t, chunkChanges, inChunkPosHash> m_changes;
-	std::vector<SubChunkModel> m_terrainModels;
+	
 
 	std::future<std::unique_ptr<ChunkRawData>> m_meshFuture;
 	bool m_isBuildingMesh = false;
@@ -154,6 +157,9 @@ private:
 		}
 	}
 public:
+	std::vector<SubChunkModel> m_terrainModels;
+	lightSystem::arrayOfLights m_lights;
+
 	chunk() = default;
 	chunk(int xid, int yid, std::shared_ptr<chunkBuffers> buffers, std::filesystem::path* path);
 	~chunk() = default;
@@ -161,7 +167,11 @@ public:
 	void update();
 	void draw(float alpha);
 
-	void setBlock(inChunkX_t x, inChunkY_t y, inChunkZ_t z, BlockId_t id, BlockMeta_t meta = 0);
+	void setBlock(inChunkX_t x, inChunkY_t y, inChunkZ_t z, 
+		BlockId_t id, BlockMeta_t meta = 0);
+
+	void placePointLight(int x, int y, int z,
+		glm::ivec3 color, float radius, float power);
 
 	static int getIndex(inChunkX_t x, inChunkY_t y, inChunkZ_t z) {
 		return x + (z * worldConstants::WIDTH) + (y * worldConstants::WIDTH * worldConstants::LENGTH);
@@ -176,10 +186,6 @@ public:
 
 	void loadFromFile();
 	void safeToFile();
-
-	std::vector<SubChunkModel>& getTerrainModel() {
-		return m_terrainModels;
-	}
 
 	bool isLoaded() {
 		return loaded;
@@ -223,10 +229,12 @@ class dimensionBase {
 protected:
 	//std::vector<> m_loadedChunks;
 	std::unordered_map<chunkPosT, std::unique_ptr<chunk>, ChunkPosHash> m_loadedChunks;
+	std::vector<std::pair<chunkPosT, chunk*>> m_sortedChunks;
+	 
 	glm::vec2 pastRenderPos{};
 	std::filesystem::path* worldPath = nullptr;
 
-	std::uint16_t time{12000};
+	std::uint16_t time{0};
 
 	void generateChunkPrep(int xid, int yid, int seed);
 	virtual std::shared_ptr<chunkBuffers> generateChunk(int xid, int yid) {return std::make_shared<chunkBuffers>();};
@@ -240,6 +248,8 @@ public:
 	void update();
 	void draw(float alpha);
 	void setBlock(int x, int y, int z, int id, int meta = 0);
+	void placePointLight(int x, int y, int z,
+		glm::ivec3 color, float radius, float power);
 
 	BlockId_t getBlock(int x, int y, int z);
 	BlockMeta_t getBlockMeta(int x, int y, int z);
@@ -290,24 +300,17 @@ public:
 };
 
 class worldManager {
-private:
-	static inline std::vector<std::unique_ptr<world>> m_worlds;
-	static inline world* currentWorld = nullptr;
 public:
+	static inline std::vector<std::unique_ptr<world>> lists;
+	static inline world* currentWorld = nullptr;
+
 	worldManager();
 	~worldManager() = default;
 
-	static std::vector<std::unique_ptr<world>>& getList() {
-		return m_worlds;
-	}
-
 	template <typename... Args>
 	static inline void createWorld(Args&&... args) {
-		m_worlds.emplace_back(std::make_unique<world>(std::forward<Args>(args)...));
+		lists.emplace_back(std::make_unique<world>(std::forward<Args>(args)...));
 	}
 
 	static void loadWorld(int id);
-	static world* getCurrentWorld() {
-		return currentWorld;
-	}
 };
