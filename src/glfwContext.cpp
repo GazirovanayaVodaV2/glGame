@@ -45,7 +45,7 @@ void glfwContext::init()
         gameSettings::resolution.second, gameSettings::windowName.c_str(),
         NULL, NULL);
     if (!m_window) {
-        logger::Console::print<logger::Level::ERROR>("Failed to create GLFW window");
+        logger::Console::print<logger::Level::ERROR>("Failed to create GLFW window, maybe opengl problems");
         glfwTerminate();
         std::exit(-1);
     }

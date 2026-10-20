@@ -50,10 +50,14 @@ void shader::checkErrors(uint32_t shader, shader::types type)
 	}
 }
 
-shader::shader(std::filesystem::path vertexShader, std::filesystem::path fragmentShader)
+void shader::load()
 {
-	auto vertexCode = readShader(vertexShader);
-	auto fragmentCode = readShader(fragmentShader);
+	if (m_isLoaded) {
+		cleanup();
+	}
+	
+	auto vertexCode = readShader(m_vertexPath);
+	auto fragmentCode = readShader(m_fragmentPath);
 
 	if (vertexCode && fragmentCode) {
 		auto vertex = compile(vertexCode.value(), types::vertex);
@@ -71,13 +75,24 @@ shader::shader(std::filesystem::path vertexShader, std::filesystem::path fragmen
 	else {
 		logger::Console::print<logger::Level::ERROR>("Failed to compile shader due failed reading!");
 	}
+	m_isLoaded = true;
 }
 
-shader::~shader()
+void shader::cleanup()
 {
 	if (ID != 0) glDeleteProgram(ID);
 }
 
+shader::shader(std::filesystem::path vertexShader, std::filesystem::path fragmentShader)
+: m_vertexPath(vertexShader), m_fragmentPath(fragmentShader)
+{
+	load();
+}
+
+shader::~shader()
+{
+	cleanup();
+}
 
 int shader::getUniformLocation(std::string_view name)
 {

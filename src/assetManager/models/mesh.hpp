@@ -27,9 +27,11 @@ private:
     size_t m_indicesCount = 0;
 
     bool m_loaded = false;
-
+		bool m_loadedFromFile = false;
+		std::filesystem::path m_path;
 	void setup();
-    void cleanup();
+  void cleanup();
+	void load();
 public:
 	mesh() = default;
 	mesh(std::filesystem::path path);
@@ -82,6 +84,12 @@ public:
 		return m_indicesCount;
 	}
 
+	void reload() {
+		if (m_loaded && m_loadedFromFile) {
+			load();
+		}
+	}
+	
 	bool isloaded() {
 		return m_loaded;
 	}

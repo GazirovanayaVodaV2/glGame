@@ -10,8 +10,8 @@
 #include "shader/shader.hpp"
 #include "collisionSystem/collisionSystem.hpp"
 
-constexpr int OPENGLVERSION_MAJOR = 4;
-constexpr int OPENGLVERSION_MINOR = 2;
+constexpr int OPENGLVERSION_MAJOR = 3;
+constexpr int OPENGLVERSION_MINOR = 3;
 constexpr int OPENGLVERSION = OPENGLVERSION_MAJOR * 10 + OPENGLVERSION_MINOR;
 
 class glfwContext {

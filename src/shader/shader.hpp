@@ -37,15 +37,23 @@ public:
 		return ID;
 	}
 
-
-
+	void reload() {
+		if (m_isLoaded) {
+			load();
+		}
+	}
 private:
 	unsigned int ID = 0;
-
+	bool m_isLoaded = false;
+	std::filesystem::path m_vertexPath, m_fragmentPath;
+	
 	std::unordered_map<std::string, int> m_uniformLocationCache;
 
 	unsigned int compile(std::string code, types type);
 	void checkErrors(uint32_t shader, types type);
+	
+	void load();
+	void cleanup();
 };
 
 template<typename T>

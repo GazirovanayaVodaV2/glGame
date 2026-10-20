@@ -1,8 +1,9 @@
 #include "mesh.hpp"
 
 #include <iostream>
-
 #include <glad/glad.h>
+
+#include "../../utils/logger/logger.hpp"
 
 void mesh::setup()
 {
@@ -50,22 +51,26 @@ void mesh::cleanup()
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
     glDeleteBuffers(1, &EBO);
+		m_loaded = false;
 }
 
-mesh::mesh(std::filesystem::path path)
+void mesh::load()
 {
+	logger::Console::print<logger::Level::INFO>("Loading mesh: " + m_path.string());
+	if (m_loadedFromFile) {
+		cleanup();
+	}
+	
 	Assimp::Importer importer;
-
-	if (std::filesystem::path(path).extension() == ".obj") {
-		const aiScene* scene = importer.ReadFile(path.string(),
+	const aiScene* scene = importer.ReadFile(m_path.string(),
 			aiProcess_Triangulate | aiProcess_GenSmoothNormals);
-
-		if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
-			std::cerr << "Assimp Error: " << importer.GetErrorString() << std::endl;
-			return;
-		}
-          
-		for (uint32_t i = 0; i < scene->mNumMeshes; i++) {
+			
+	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
+		logger::Console::print<logger::Level::ERROR>("Assimp error: " + std::string(importer.GetErrorString()));
+		return;
+	}
+				
+	for (uint32_t i = 0; i < scene->mNumMeshes; i++) {
 			aiMesh* mesh = scene->mMeshes[i];
             unsigned int vertexOffset = static_cast<unsigned int>(m_verticies.size());
 
@@ -103,16 +108,29 @@ mesh::mesh(std::filesystem::path path)
                 }
             }
 		}
-        setup();
-        return;
+  if (!m_loaded) {
+		setup();
 	}
+	
+}
+
+mesh::mesh(std::filesystem::path path)
+{
+	if (std::filesystem::path(path).extension() == ".obj") {
+		m_path = path;
+	} else {
+		throw std::runtime_error("Wrong format of shader: " + path.string());
+	}
+	m_loadedFromFile = true;
+	load();
+	return;
 }
 
 mesh::mesh(std::vector<vertex> verticies, std::vector<unsigned int> indicies)
 {
-    m_verticies = verticies;
-    m_indicies = indicies;
-    setup();
+	m_verticies = verticies;
+	m_indicies = indicies;
+	setup();
 }
 
 void mesh::bind() {

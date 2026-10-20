@@ -105,6 +105,12 @@ void Player::keyCallback(GLFWwindow* window)
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) moveDir += right;
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) moveDir -= right;
 
+		if (glfwGetKey(window, GLFW_KEY_K) == GLFW_PRESS) {
+			logger::Console::print<logger::Level::INFO>("Reloading shaders and textures");
+			mainAssetManager::reloadAll<shader>();
+			mainAssetManager::reloadAll<texture>(); //TODO fix this
+		}
+
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
         if (m_onGround) {
             m_velocity.y = m_jumpForce; 

@@ -60,7 +60,6 @@ protected:
 			throw std::runtime_error("Failed to find asset named: " + keyToString(key));
 		}
 	}
-
 	static void erase(keyType key) {
 		if constexpr (std::is_same_v<containerType, std::vector<std::unique_ptr<T>>>) {
 			if (key < m_resources.size()) {
@@ -71,6 +70,26 @@ protected:
 			m_resources.erase(key);
 		}
 	}
+	static void reload(keyType key) {
+		get(key)->reload();
+	}
+	static void reloadAll() {
+		if constexpr (std::is_same_v<containerType, std::vector<std::unique_ptr<T>>>) {
+			for (auto& element : m_resources) {
+				if (element) {
+					element->reload();
+				}
+			}
+		}
+		else {
+			for (auto& [key, element] : m_resources) {
+				if (element) {
+					element->reload();
+				}
+			}
+		}
+	}
+	
 	static void deleteAll() {
 		m_resources.clear();
 	}
@@ -92,7 +111,18 @@ public:
 	}
 	template <typename T, typename Key>
 	static void erase(Key&& key) {
-		return assetPool<T>::erase(std::forward<Key>(key));
+		assetPool<T>::erase(std::forward<Key>(key));
+	}
+	template <typename T, typename Key>
+	static void reload(Key&& key) {
+		assetPool<T>::reload(std::forward<Key>(key));
+	}
+	template <typename T>
+	static void reloadAll() {
+		assetPool<T>::reloadAll();
+	}
+	static void reloadAll() {
+		(assetPool<Types>::reloadAll(), ...);
 	}
 	template <typename T>
 	static void deleteAll() {
