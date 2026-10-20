@@ -200,6 +200,52 @@ void chunk::placePointLight(int x, int y, int z, glm::ivec3 color, float radius,
 	}
 	else {
 		m_lights.points.emplace_back(lightSystem::point{ _pos, color, power, radius });
+		return;
+		
+		//Fix this later;
+		std::vector<lightSystem::point*> nearestPoints;
+		float effectiveRadius = radius / 2.0f;
+		for (auto& point : m_lights.points) {
+			float dist = glm::length(point.m_pos - _pos);
+			float secondEffectiveRadius = point.m_radius / 2.0f;
+			float realDist = dist - effectiveRadius - secondEffectiveRadius;
+			
+			if (realDist > 0.0f) {
+				continue;
+			}
+			
+			nearestPoints.push_back(&point);
+		}
+		
+		if (nearestPoints.size() == 0) {
+			m_lights.points.emplace_back(lightSystem::point{ _pos, color, power, radius });
+			return;
+		}
+		
+		auto placePoint = lightSystem::point{ _pos, color, power, radius };
+		nearestPoints.push_back(&placePoint);
+		
+		glm::vec3 resPos{}, resColor{},
+							posPower{}, colorSumm{};
+		
+		float resPower = 0.0f, resRadius = 0.0f;
+		
+		for (auto& npoint : nearestPoints) {
+			resPower += npoint->m_power;
+			posPower += npoint->m_power * npoint->m_pos;
+			colorSumm += npoint->m_color;
+			
+			for (auto& point2 : nearestPoints) {
+				float nearestPointsDist = glm::length(npoint->m_pos - point2->m_pos);
+				resRadius = std::max(resRadius, nearestPointsDist / 2.0f);
+			}
+		}
+		
+		resPos = posPower / resPower;
+		resColor = colorSumm / (float)nearestPoints.size();
+		
+		for (auto* p : nearestPoints) std::erase_if(m_lights.points, [p](const auto& pt) { return &pt == p; });
+		m_lights.points.emplace_back(lightSystem::point{ resPos, resColor, resPower, resRadius });
 	}
 }
 
