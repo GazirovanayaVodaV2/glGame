@@ -5,6 +5,7 @@
 #include <bit>
 #include <future>
 #include <fstream>
+#include <cmath>
 
 #include "nlohmann/json.hpp"
 
@@ -232,11 +233,22 @@ void chunk::loadFromFile()
 {
 	if (worldPath) {
 		using json = nlohmann::json;
-		std::ifstream chunkFile(*worldPath / std::format("{}_{}.json", this->ix, this->iy));
+		auto fileName = std::format("{}_{}.json", this->ix, this->iy);
+		std::ifstream chunkFile(*worldPath / fileName);
 
 		if (!chunkFile.is_open()) {
+			//logger::Console::print<logger::Level::ERROR>("Failed to open file: " + fileName);
+			//its not a error, its a normal situation
 			return;
 		}
+		chunkFile.seekg(0, std::ios::end);
+		auto size = chunkFile.tellg();
+		if (size == 0) {
+			logger::Console::print<logger::Level::ERROR>("file " + fileName + " size is 0!");
+			return;
+		}
+		chunkFile.seekg(0, std::ios::beg);
+
 		auto parsedFile = json::parse(chunkFile);
 		/*
 		
@@ -246,7 +258,7 @@ void chunk::loadFromFile()
 		auto blockChanges = getField(parsedFile, "blockChanges", std::vector<std::vector<int>>);
 
 		m_changes.clear();
-		for (auto& rawChange : blockChanges) {
+		for (const auto& rawChange : blockChanges) {
 			auto x = rawChange[0];
 			auto y = rawChange[1];
 			auto z = rawChange[2];
@@ -256,6 +268,51 @@ void chunk::loadFromFile()
 			m_changes[inChunkPos_t{ x,y,z }] = { id, meta };
 
 			setBlock(x, y, z, id, meta);
+		}
+
+		if (parsedFile.find("lightPoints") != parsedFile.end()) {
+			auto pointLights = getField(parsedFile, "lightPoints", std::vector<std::vector<std::uint64_t>>);
+
+			constexpr std::uint64_t mask = 0x00000000FFFFFFFF;
+			auto unwrapFloat = [](std::uint64_t val) {
+				return std::bit_cast<float>(static_cast<std::uint32_t>(val));
+				};
+			
+			auto isValid = [](float val) -> bool {
+				return std::isnormal(val) || val == 0.0f;
+				};
+			for (const auto& rawLight : pointLights) {
+				auto posx = unwrapFloat(rawLight[0] >> 32);
+				auto posy = unwrapFloat(mask & rawLight[0]);
+				auto posz = unwrapFloat(rawLight[1] >> 32);
+
+				if (!isValid(posx) || !isValid(posy) || !isValid(posz)) {
+					logger::Console::print<logger::Level::WARNING>("Skipped point light due invalid pos!");
+					continue;
+				}
+
+				auto r = static_cast<std::uint32_t>(mask & rawLight[1]);
+				auto g = static_cast<std::uint32_t>(rawLight[2] >> 32);
+				auto b = static_cast<std::uint32_t>(mask & rawLight[2]);
+
+				auto radius = unwrapFloat(rawLight[3] >> 32);
+				if (!isValid(radius)) {
+					logger::Console::print<logger::Level::WARNING>("Skipped point light due invalid radius!");
+					continue;
+				}
+				auto power = unwrapFloat(mask & rawLight[3]);
+				if (!isValid(power)) {
+					logger::Console::print<logger::Level::WARNING>("Skipped point light due invalid power!");
+					continue;
+				}
+
+				if (power > 0.0f) {
+					//do not use placePointLight()
+					glm::vec3 _pos{ posx,posy,posz },
+						color{ r,g,b };
+					m_lights.points.emplace_back(lightSystem::point{ _pos, color, power, radius });
+				}
+			}
 		}
 	}
 }
@@ -283,8 +340,32 @@ void chunk::safeToFile()
 				});
 		}
 
+		using pointBitset = std::array<std::uint64_t, 4>;
+		std::vector<pointBitset> lightPoints(m_lights.points.size());
+		for (std::size_t i{ 0 }; i < m_lights.points.size(); i++) {
+			const auto& pointLight = m_lights.points[i];
+
+			auto castFloat = [](float val) {
+				return static_cast<std::uint64_t>(std::bit_cast<std::uint32_t>(val));
+				};
+
+			pointBitset bits{};
+			bits[0] = castFloat(pointLight.m_pos.x) << 32;
+			bits[0] |= castFloat(pointLight.m_pos.y);
+			bits[1] = castFloat(pointLight.m_pos.z) << 32;
+
+			bits[1] |= static_cast<std::uint64_t>(pointLight.m_color.r);
+			bits[2] = static_cast<std::uint64_t>(pointLight.m_color.g) << 32;
+			bits[2] |= static_cast<std::uint64_t>(pointLight.m_color.b);
+
+			bits[3] = castFloat(pointLight.m_radius) << 32;
+			bits[3] |= castFloat(pointLight.m_power);
+			lightPoints.push_back(bits);
+		}
+
 		json parsedFile;
 		parsedFile["blockChanges"] = blockChanges;
+		parsedFile["lightPoints"] = lightPoints;
 		chunkFile << parsedFile.dump(4);
 	}
 }
@@ -717,8 +798,8 @@ std::unique_ptr<ChunkRawData> meshBuilder::buildMesh(const blockArray& blocks, c
 			indices.push_back(indexOffset + 3);
 		};
 
-	auto getFaceUVs = [](int id, int faceIndex, glm::vec2 outUVs[4]) {
-		auto& blockUVs = BlockTable::getBlock(id)->getMesh().getUV();
+	auto getFaceUVs = [](const std::vector<glm::vec2>& blockUVs, int faceIndex, glm::vec2 outUVs[4]) {
+		
 		size_t count = blockUVs.size();
 
 		if (count >= 24 && count < 36) {
@@ -784,42 +865,41 @@ std::unique_ptr<ChunkRawData> meshBuilder::buildMesh(const blockArray& blocks, c
 				auto& verts = rawMesh.vertices;
 				auto& inds = rawMesh.indices;
 
-				if (verts.capacity() == 0) verts.reserve(1000);
-				if (inds.capacity() == 0) inds.reserve(1500);
+				if (verts.capacity() == 0) verts.reserve(2000);
+				if (inds.capacity() == 0) inds.reserve(3000);
 
-				
-			
 				glm::vec3 pos(x, y, z);
 				glm::vec2 faceUVs[4];
-
+				auto* blockDef = BlockTable::getBlock(blockId);
+				const auto& blockUVs = blockDef->getMesh().getUV();
 				// Top (Y+) - Face 0
 				if (!isSolid(x, y + 1, z)) {
-					getFaceUVs(blockId , 0, faceUVs);
+					getFaceUVs(blockUVs, 0, faceUVs);
 					addFace(verts, inds, pos + glm::vec3(0, 1, 1), pos + glm::vec3(1, 1, 1), pos + glm::vec3(1, 1, 0), pos + glm::vec3(0, 1, 0), { 0.0f, 1.0f, 0.0f }, faceUVs);
 				}
 				// Bottom (Y-) - Face 1
 				if (!isSolid(x, y - 1, z)) {
-					getFaceUVs(blockId, 1, faceUVs);
+					getFaceUVs(blockUVs, 1, faceUVs);
 					addFace(verts, inds, pos + glm::vec3(0, 0, 0), pos + glm::vec3(1, 0, 0), pos + glm::vec3(1, 0, 1), pos + glm::vec3(0, 0, 1), { 0.0f, -1.0f, 0.0f }, faceUVs);
 				}
 				// Right (X+) - Face 2
 				if (!isSolid(x + 1, y, z)) {
-					getFaceUVs(blockId, 2, faceUVs);
+					getFaceUVs(blockUVs, 2, faceUVs);
 					addFace(verts, inds, pos + glm::vec3(1, 0, 1), pos + glm::vec3(1, 0, 0), pos + glm::vec3(1, 1, 0), pos + glm::vec3(1, 1, 1), { 1.0f, 0.0f, 0.0f }, faceUVs);
 				}
 				// Left (X-) - Face 3
 				if (!isSolid(x - 1, y, z)) {
-					getFaceUVs(blockId, 3, faceUVs);
+					getFaceUVs(blockUVs, 3, faceUVs);
 					addFace(verts, inds, pos + glm::vec3(0, 0, 0), pos + glm::vec3(0, 0, 1), pos + glm::vec3(0, 1, 1), pos + glm::vec3(0, 1, 0), { -1.0f, 0.0f, 0.0f }, faceUVs);
 				}
 				// Front (Z+) - Face 4
 				if (!isSolid(x, y, z + 1)) {
-					getFaceUVs(blockId, 4, faceUVs);
+					getFaceUVs(blockUVs, 4, faceUVs);
 					addFace(verts, inds, pos + glm::vec3(0, 0, 1), pos + glm::vec3(1, 0, 1), pos + glm::vec3(1, 1, 1), pos + glm::vec3(0, 1, 1), { 0.0f, 0.0f, 1.0f }, faceUVs);
 				}
 				// Back (Z-) - Face 5
 				if (!isSolid(x, y, z - 1)) {
-					getFaceUVs(blockId, 5, faceUVs);
+					getFaceUVs(blockUVs, 5, faceUVs);
 					addFace(verts, inds, pos + glm::vec3(1, 0, 0), pos + glm::vec3(0, 0, 0), pos + glm::vec3(0, 1, 0), pos + glm::vec3(1, 1, 0), { 0.0f, 0.0f, -1.0f }, faceUVs);
 				}
 			}
@@ -828,10 +908,10 @@ std::unique_ptr<ChunkRawData> meshBuilder::buildMesh(const blockArray& blocks, c
 
 	auto result = std::make_unique<ChunkRawData>();
 	std::size_t id{};
-    for (const auto& mesh : threadLocalCache->meshes) {
+    for (auto& mesh : threadLocalCache->meshes) {
         if (!mesh.vertices.empty()) {
-			result->meshes[id].vertices = std::move(mesh.vertices);
-			result->meshes[id].indices = std::move(mesh.indices);
+			result->meshes[id].vertices.swap(mesh.vertices);
+			result->meshes[id].indices.swap(mesh.indices);
         }
 		id++;
     }
