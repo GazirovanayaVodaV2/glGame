@@ -15,9 +15,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 if(MSVC)
-  set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "EditAndContinue")
+  set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<$<CONFIG:Debug>:EditAndContinue>")
+  
   add_compile_options($<$<CONFIG:Debug>:/ZI>)
   add_link_options($<$<CONFIG:Debug>:/INCREMENTAL>)
+
+  add_link_options($<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>:/LTCG>)
+  add_link_options($<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>:/OPT:REF>)
+  add_link_options($<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>:/OPT:ICF>)
 endif()
 
 
@@ -95,6 +100,15 @@ if (IS_LIBRARY)
     add_library(${PROJECT_NAME} "main.cpp"  ${SOURCES} ${HEADERS})
 else()
     add_executable(${PROJECT_NAME} "main.cpp" ${SOURCES} ${HEADERS})
+endif()
+
+if(MSVC)
+  target_compile_options(${PROJECT_NAME} PRIVATE
+      $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>:/O2>
+      $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>:/Oi>
+      $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>:/Ot>
+      $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>:/GL>
+  )
 endif()
 
 target_include_directories(${PROJECT_NAME} PRIVATE 

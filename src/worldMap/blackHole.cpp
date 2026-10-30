@@ -53,7 +53,7 @@ void blackHole::MoveOn(glm::vec3 delta) {
 }
 
 void blackHole::Rotate(glm::vec3 deltaRotation) {
-    m_transform.rotation += deltaRotation;
+    m_transform.rotate(m_transform.getRotation() + deltaRotation);
 
     if (m_model) {
         m_model->Rotate(deltaRotation);

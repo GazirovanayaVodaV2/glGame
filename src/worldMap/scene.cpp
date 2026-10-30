@@ -22,6 +22,7 @@
 #include "../renderer/renderer.hpp"
 #include "../application/application.hpp"
 #include "../utils/logger/logger.hpp"
+#include "../utils/system/memory/memory.hpp"
 
 #define getField(JSON, NAME, TYPE) JSON.at(NAME).get<TYPE>()
 chunk::chunk(int xid, int yid, std::shared_ptr<chunkBuffers> buffers, std::filesystem::path* path)
@@ -424,19 +425,55 @@ void dimensionBase::loadChunksFromPos(glm::vec3 pos, int renderDistance, int see
 		});
 
 
-	int activeRadius = 2; 
-    for (auto& [chunkPos, chunkPtr] : m_loadedChunks) {
-        auto [cx, cz] = chunkPos;
-        bool inActiveZone = (std::abs(cx - centerChunkX) <= activeRadius && 
-                             std::abs(cz - centerChunkZ) <= activeRadius);
+	constexpr int activeRadius = 2; 
 
-        if (inActiveZone) {
-            chunkPtr->decompress();
-        } else {
-            chunkPtr->compress();
-        }
-    }
+	const utils::system::memory_t requiredMemory = ((renderDistance * renderDistance)
+		* worldConstants::CHUNK_VOLUME * sizeof(BlockId_t) / 2) * 1.1;
+	//—читаем что размер чанка определ€етс€ блоками. 
+	//“к размер в любом случае непосто€нный то возьмЄм с запасом в 10%
+	const auto freeMemory = utils::system::getFreeMemory();
+
+	for (auto& [chunkPos, chunkPtr] : m_loadedChunks) {
+		auto [cx, cz] = chunkPos;
+		bool inActiveZone = (std::abs(cx - centerChunkX) <= activeRadius &&
+			std::abs(cz - centerChunkZ) <= activeRadius);
+
+		if (inActiveZone) {
+			chunkPtr->decompress();
+		}
+		else {
+			if (requiredMemory > freeMemory) {
+				chunkPtr->compress();
+			}
+		}
+	}
 }
+
+void dimensionBase::minorUpdates()
+{
+	auto allLightsView = m_sortedChunks
+		| std::views::transform([](const auto& item) {
+		return std::span(item.second->m_lights.points);
+			})
+		| std::views::join
+		| std::views::transform([](const auto& light) -> pointLightData {
+		pointLightData lightData;
+		lightData.m_pos = light.m_pos;
+		lightData.m_color.r = light.m_color.r / 255.0f;
+		lightData.m_color.g = light.m_color.g / 255.0f;
+		lightData.m_color.b = light.m_color.b / 255.0f;
+		lightData.m_radius = light.m_radius;
+		lightData.m_power = light.m_power;
+		return lightData;
+			})
+		| std::views::take(lightSystem::point::maxCount);
+
+	auto [in_it, out_it] = std::ranges::copy(allLightsView, &globalUniforms_pointLightData.lights[0]);
+	globalUniforms_pointLightData.activeLights = std::distance(&globalUniforms_pointLightData.lights[0], out_it);
+
+	UniformBuffer<globalUniforms_pointLightData_t>::update(globalUniforms_pointLightData);
+}
+
 
 void dimensionBase::update()
 {
@@ -444,27 +481,12 @@ void dimensionBase::update()
 		ch->update();
 	}
 
-	auto allLightsView = m_sortedChunks
-		| std::views::transform([](const auto& item) {
-		return std::span(item.second->m_lights.points);
-			})
-		| std::views::join
-		| std::views::transform([](const auto& light) -> pointLightData {
-				pointLightData lightData;
-				lightData.m_pos = light.m_pos;
-				lightData.m_color.r = light.m_color.r / 255.0f;
-				lightData.m_color.g = light.m_color.g / 255.0f;
-				lightData.m_color.b = light.m_color.b / 255.0f;
-				lightData.m_radius = light.m_radius;
-				lightData.m_power = light.m_power;
-				return lightData;
-			})
-		| std::views::take(lightSystem::point::maxCount);
-
-	auto [in_it, out_it] = std::ranges::copy(allLightsView, &globalUniforms_pointLightData.lights[0]);
-	globalUniforms_pointLightData.activeLights = std::distance(&globalUniforms_pointLightData.lights[0], out_it);
-	 
-	UniformBuffer<globalUniforms_pointLightData_t>::update(globalUniforms_pointLightData);
+	//in theory its should throttle down minor tasks if low fps
+	minorTasksTimer++;
+	if (minorTasksTimer > minorTask.getTicksBeforeStart(application::logicTimer)) {
+		minorTasksTimer = 0;
+		minorUpdates();
+	}
 	
 	time++; 
 	if (time > 24000) {
@@ -557,6 +579,7 @@ void dimensionBase::generateChunkPrep(int xid, int yid, int seed)
 		);
 	}
 }
+
 
 world::~world()
 {

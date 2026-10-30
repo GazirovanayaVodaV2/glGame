@@ -23,6 +23,7 @@
 
 #include "../compression/compression.hpp"
 #include "../utils/minTypes/minTypes.hpp"
+#include "../utils/timer/timer.hpp"
 #include "../shader/lightSystem/lightSystem.hpp"
 
 
@@ -234,11 +235,15 @@ protected:
 	glm::vec2 pastRenderPos{};
 	std::filesystem::path* worldPath = nullptr;
 
+	minorTask minorTask;
+	std::uint8_t minorTasksTimer{ 0 };
 	std::uint16_t time{0};
+
 
 	void generateChunkPrep(int xid, int yid, int seed);
 	virtual std::shared_ptr<chunkBuffers> generateChunk(int xid, int yid) {return std::make_shared<chunkBuffers>();};
 	
+	void minorUpdates();
 public:
 	dimensionBase() = default;
 	dimensionBase(std::filesystem::path* path) : worldPath(path) {}

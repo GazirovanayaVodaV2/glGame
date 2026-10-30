@@ -50,12 +50,12 @@ void Player::update() {
     
     */
     //std::cout << getPos().y << std::endl;
-
+    auto playerRotation = m_transform.getRotation();
     auto cameraFront = Camera::getFront();
     auto cameraFrontXZ = glm::normalize(glm::vec3(cameraFront.x, 0.0f, cameraFront.z));
     //float targetYaw = glm::degrees(glm::atan(cameraFrontXZ.x, cameraFrontXZ.z));
     float targetYaw = (glm::atan(cameraFrontXZ.x, cameraFrontXZ.z));
-    float deltaYaw = targetYaw - m_transform.rotation.y;
+    float deltaYaw = targetYaw - playerRotation.y;
     Rotate(glm::vec3(0.0f, deltaYaw, 0.0f));
 
 
@@ -70,8 +70,9 @@ void Player::update() {
 //to do fix input
 void Player::keyCallback(GLFWwindow* window)
 {
-    float yawRad = m_transform.rotation.y;
-    float pitchRad = m_transform.rotation.x;
+    auto playerRotation = m_transform.getRotation();
+    float yawRad = playerRotation.y;
+    float pitchRad = playerRotation.x;
 
     glm::vec3 front;
     front.x = std::sin(yawRad) * std::cos(pitchRad);
@@ -186,7 +187,7 @@ void Player::MoveOn(glm::vec3 delta) {
 }
 
 void Player::Rotate(glm::vec3 deltaRotation) {
-    m_transform.rotation += deltaRotation;
+    m_transform.rotate(m_transform.getRotation() + deltaRotation);
 
     if (m_model) {
         m_model->Rotate(deltaRotation);

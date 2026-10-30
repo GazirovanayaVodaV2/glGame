@@ -1,6 +1,8 @@
 #pragma once
 
 #include <chrono>
+#include <vector>
+#include <numeric>
 
 class timer {
 private:
@@ -43,3 +45,29 @@ inline float timer::getDelta(bool _reset)
 	}
 	return delta;
 }
+
+struct minorTaskPosition {
+	unsigned char minimumTicks;
+	unsigned char ticksBeforeStart;
+};
+
+struct minorTask {
+public:
+	std::vector<minorTaskPosition> minorTaskPositions;
+
+	minorTask();
+	~minorTask() = default;
+
+	const auto getTicksBeforeStart(timer& _timer) {
+		const auto deltaTicks = _timer.getDeltaTicks(false);
+		auto minTicksInList{std::numeric_limits<decltype(minorTaskPosition::minimumTicks)>::max()};
+		decltype(minorTaskPosition::ticksBeforeStart) lastValue{1};
+		for (const auto& _minorTask : minorTaskPositions) {
+			if (minTicksInList < _minorTask.minimumTicks) {
+				minTicksInList = _minorTask.minimumTicks;
+				lastValue = _minorTask.ticksBeforeStart;
+			}
+		}
+		return lastValue;
+	};
+};

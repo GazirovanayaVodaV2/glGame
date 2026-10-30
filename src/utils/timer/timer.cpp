@@ -28,3 +28,11 @@ void timer::start()
 void timer::reset() {
 	start();
 }
+
+minorTask::minorTask()
+{
+	minorTaskPositions.push_back(minorTaskPosition{1, 20});
+	minorTaskPositions.push_back(minorTaskPosition{5, 10});
+	minorTaskPositions.push_back(minorTaskPosition{10, 5});
+	minorTaskPositions.push_back(minorTaskPosition{15, 1});
+}

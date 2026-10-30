@@ -58,7 +58,7 @@ public:
 		m_transform.pos += delta;
 	};
 	void Rotate(glm::vec3 deltaRotation) override {
-		m_transform.rotation += deltaRotation;
+		m_transform.rotate(m_transform.getRotation() + deltaRotation);
 	};
 	void Scale(glm::vec3 s) {
 		m_transform.scale = s;
